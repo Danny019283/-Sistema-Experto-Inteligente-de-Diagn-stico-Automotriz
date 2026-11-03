@@ -417,3 +417,327 @@ componente_sintoma(sensor_tpms, luz_tpms, presente, 24, 48).
 componente_sintoma(sensor_tpms, presion_llantas_baja, presente, 24, 48).
 componente_sintoma(maza_rueda, chasquidos_al_girar, presente, 24, 48).
 componente_sintoma(maza_rueda, rueda_bambolea, presente, 24, 48).
+
+% ---------- Acciones correctivas ----------
+% accion(Id, Nombre)
+% accion_componente(Accion, Componente, Maj)   Maj = efectividad de la acción sobre el componente, en [0, 1].
+%   Ra = 1 - prod_j (1 - P(Cj|S) * Maj)   sobre los componentes confirmados (PDF §2.3).
+%   Una acción puede servir a varios componentes y un componente admite varias acciones.
+:- discontiguous accion/2.
+:- discontiguous accion_componente/3.
+
+accion(purgar_cambiar_liquido_frenos, 'Purgar y cambiar el líquido de frenos').
+accion(revisar_fugas_circuito_frenos, 'Revisar fugas del circuito de frenos').
+accion(rectificar_discos, 'Rectificar los discos de freno').
+accion(rectificar_tambor, 'Rectificar el tambor de freno').
+accion(localizar_fugas_refrigerante, 'Localizar y reparar fugas del sistema de enfriamiento').
+accion(rellenar_refrigerante, 'Rellenar refrigerante').
+accion(reemplazar_tapon_radiador, 'Reemplazar el tapón del radiador').
+accion(desobstruir_radiador_condensador, 'Limpiar y desobstruir radiador o condensador').
+accion(localizar_fugas_aceite, 'Localizar y sellar fugas de aceite').
+accion(rellenar_aceite_motor, 'Rellenar aceite del motor').
+accion(detectar_fugas_recargar_ac, 'Detectar fugas y recargar el refrigerante del A/C').
+accion(limpiar_evaporador_ac, 'Limpiar el evaporador (moho y humedad)').
+accion(localizar_fugas_combustible, 'Localizar y reparar fugas de combustible').
+accion(reemplazar_tapon_gasolina, 'Reemplazar el tapón del tanque de gasolina').
+accion(sellar_fugas_escape, 'Sellar fugas del sistema de escape').
+accion(reapretar_pernos, 'Reapretar pernos de sujeción').
+accion(reparar_cableado, 'Reparar cableado y conectores').
+accion(reemplazar_fusible_rele, 'Reemplazar fusible o relé').
+accion(limpiar_terminales_bateria, 'Limpiar y apretar los terminales de la batería').
+accion(cargar_bateria, 'Cargar la batería').
+accion(ajustar_tension_banda, 'Ajustar tensión y alineación de la banda').
+accion(ajustar_cable_embrague, 'Ajustar la tensión del cable del embrague').
+accion(purgar_embrague, 'Purgar el sistema hidráulico del embrague').
+accion(limpiar_cuerpo_aceleracion, 'Limpiar el cuerpo de aceleración y la válvula IAC').
+accion(limpiar_carbonilla_valvulas, 'Limpiar la carbonilla de las válvulas').
+accion(ajustar_holgura_valvulas, 'Ajustar la holgura de válvulas').
+accion(limpiar_inyectores, 'Limpiar los inyectores y verificar su patrón de rocío').
+accion(reprogramar_ecu, 'Reprogramar o reiniciar la ECU').
+accion(alinear_balancear, 'Alinear y balancear las ruedas').
+accion(ajustar_presion_llantas, 'Ajustar la presión de las llantas').
+accion(alinear_tren_motriz, 'Alinear el tren motriz').
+accion(rellenar_liquido_direccion, 'Rellenar líquido de la dirección asistida').
+accion(rellenar_liquido_limpiaparabrisas, 'Rellenar líquido limpiaparabrisas').
+accion(rellenar_fluido_transmision, 'Rellenar fluido de la transmisión').
+accion(cambiar_aceite_diferenciales, 'Cambiar el aceite del diferencial').
+accion(rellenar_liquido_embrague, 'Rellenar líquido del embrague').
+accion(lubricar_guia_vidrio, 'Lubricar y realinear la guía del vidrio').
+accion(reemplazar_modulo_abs, 'Reemplazar módulo de control ABS').
+accion(reemplazar_sensor_velocidad_rueda, 'Reemplazar sensor de velocidad de rueda (ABS)').
+accion(reemplazar_servofreno, 'Reemplazar servofreno (booster)').
+accion(reemplazar_caliper_freno, 'Reemplazar caliper de freno').
+accion(reemplazar_manguera_freno, 'Reemplazar manguera de freno').
+accion(reemplazar_cilindro_maestro_freno, 'Reemplazar cilindro maestro de freno').
+accion(reemplazar_pastillas_freno, 'Reemplazar pastillas de freno').
+accion(reemplazar_discos_freno, 'Reemplazar discos de freno').
+accion(reemplazar_zapatas_tambor, 'Reemplazar zapatas y tambor de freno').
+accion(reemplazar_compresor_ac, 'Reemplazar compresor del A/C').
+accion(reemplazar_condensador_ac, 'Reemplazar condensador del A/C').
+accion(reemplazar_evaporador_ac, 'Reemplazar evaporador del A/C').
+accion(cambiar_filtro_cabina, 'Cambiar filtro de aire de la cabina').
+accion(reemplazar_motor_ventilador_hvac, 'Reemplazar motor del ventilador de calefacción/A/C').
+accion(reemplazar_resistencia_ventilador_hvac, 'Reemplazar resistencia del motor del ventilador').
+accion(cambiar_refrigerante, 'Cambiar refrigerante / anticongelante').
+accion(reemplazar_termostato, 'Reemplazar termostato / sistema de enfriamiento del motor').
+accion(reemplazar_nucleo_calefaccion, 'Reemplazar núcleo de calefacción (heater core)').
+accion(reemplazar_manguera_calefaccion, 'Reemplazar manguera de calefacción').
+accion(reemplazar_ventilador_radiador, 'Reemplazar ventilador del radiador').
+accion(reemplazar_manguera_radiador, 'Reemplazar manguera del radiador').
+accion(reemplazar_bomba_agua, 'Reemplazar bomba de agua').
+accion(reemplazar_engranes_conicos, 'Reemplazar engranes cónicos').
+accion(reemplazar_diferencial_central, 'Reemplazar diferencial central').
+accion(reemplazar_cable_embrague, 'Reemplazar cable del embrague').
+accion(reemplazar_cilindro_esclavo_embrague, 'Reemplazar cilindro esclavo del embrague').
+accion(reemplazar_diferencial, 'Reemplazar diferencial').
+accion(reemplazar_eje_motriz, 'Reemplazar eje motriz (eje vivo)').
+accion(reemplazar_eje_rigido, 'Reemplazar eje rígido').
+accion(reemplazar_transmision_automatica, 'Reemplazar transmisión automática').
+accion(reemplazar_junta_universal, 'Reemplazar junta universal (cruceta)').
+accion(reemplazar_acoplamiento_viscoso, 'Reemplazar acoplamiento viscoso').
+accion(reemplazar_bateria, 'Reemplazar batería').
+accion(reemplazar_sistema_carga, 'Reemplazar sistema de carga (alternador)').
+accion(reemplazar_motor_vidrio_puerta, 'Reemplazar motor del vidrio eléctrico').
+accion(reemplazar_regulador_vidrio_puerta, 'Reemplazar regulador del vidrio eléctrico').
+accion(reemplazar_foco_faro, 'Reemplazar foco del faro').
+accion(reemplazar_tapa_distribuidor, 'Reemplazar tapa del distribuidor').
+accion(reemplazar_cables_bujias, 'Reemplazar juego de cables de bujías').
+accion(reemplazar_actuador_seguro_puerta, 'Reemplazar actuador del seguro eléctrico de puerta').
+accion(reemplazar_motor_arranque, 'Reemplazar motor de arranque').
+accion(reemplazar_bomba_limpiaparabrisas, 'Reemplazar bomba del limpiaparabrisas').
+accion(reemplazar_motor_limpiaparabrisas, 'Reemplazar motor del limpiaparabrisas').
+accion(reemplazar_valvula_purga_canister, 'Reemplazar válvula de purga del canister').
+accion(reemplazar_catalizador, 'Reemplazar convertidor catalítico').
+accion(reemplazar_canister_carbon, 'Reemplazar canister de carbón activado').
+accion(reemplazar_multiple_escape, 'Reemplazar múltiple de escape').
+accion(reemplazar_junta_multiple_escape, 'Reemplazar junta del múltiple de escape').
+accion(reemplazar_sensor_presion_tanque, 'Reemplazar sensor de presión del tanque de combustible').
+accion(reemplazar_sensor_detonacion, 'Reemplazar sensor de detonación (knock)').
+accion(reemplazar_sensor_map, 'Reemplazar sensor MAP').
+accion(reemplazar_sensor_oxigeno, 'Reemplazar sensor de oxígeno').
+accion(reemplazar_eje_balanceo, 'Reemplazar eje de balanceo').
+accion(reemplazar_presion_turbo, 'Reemplazar presión de sobrealimentación (turbo/intercooler)').
+accion(reemplazar_bomba_inyeccion_diesel, 'Reemplazar bomba de inyección diésel').
+accion(reemplazar_bujia_incandescente, 'Reemplazar bujía incandescente (diésel)').
+accion(reemplazar_soportes_motor, 'Reemplazar soportes del motor').
+accion(reemplazar_valvula_escape, 'Reemplazar válvula de escape').
+accion(reemplazar_inyector_combustible, 'Reemplazar inyector de combustible').
+accion(reemplazar_valvula_iac, 'Reemplazar válvula de control de aire de ralentí (IAC)').
+accion(reemplazar_valvula_admision, 'Reemplazar válvula de admisión').
+accion(reemplazar_bomba_aceite, 'Reemplazar bomba de aceite').
+accion(reemplazar_anillos_piston, 'Reemplazar anillos de pistón').
+accion(reemplazar_banda_distribucion, 'Reemplazar banda de distribución').
+accion(reemplazar_junta_tapa_valvulas, 'Reemplazar junta de la tapa de válvulas').
+accion(reemplazar_banda_accesorios, 'Reemplazar banda del motor / ventilador').
+accion(reemplazar_claxon, 'Reemplazar claxon').
+accion(cambiar_liquido_direccion, 'Cambiar líquido de la dirección asistida').
+accion(reemplazar_eje_y_llantas, 'Reemplazar eje de transmisión y llantas (balanceo/alineación)').
+accion(cambiar_filtro_aire, 'Cambiar filtro de aire del motor').
+accion(reemplazar_ecu, 'Reemplazar unidad de control del motor (ECU)').
+accion(cambiar_aceite_motor, 'Cambiar aceite del motor').
+accion(cambiar_filtro_combustible, 'Cambiar filtro de combustible').
+accion(reemplazar_valvula_pcv, 'Reemplazar válvula PCV').
+accion(reemplazar_cuerpo_aceleracion, 'Reemplazar cuerpo de aceleración').
+accion(reemplazar_regulador_presion_combustible, 'Reemplazar regulador de presión de combustible').
+accion(reemplazar_bomba_combustible, 'Reemplazar bomba de combustible').
+accion(reemplazar_tanque_combustible, 'Reemplazar tanque de combustible').
+accion(reemplazar_sensor_tps, 'Reemplazar sensor de posición del acelerador (TPS)').
+accion(reemplazar_deposito_refrigerante, 'Reemplazar depósito de refrigerante').
+accion(reemplazar_radiador, 'Reemplazar radiador').
+accion(cambiar_liquido_limpiaparabrisas, 'Cambiar líquido limpiaparabrisas').
+accion(reemplazar_cilindro_maestro_embrague, 'Reemplazar cilindro maestro del embrague').
+accion(reemplazar_convertidor_par, 'Reemplazar convertidor de par').
+accion(cambiar_fluido_transmision, 'Cambiar fluido de la transmisión').
+accion(cambiar_filtro_transmision, 'Cambiar filtro de la transmisión').
+accion(reemplazar_solenoide_transmision, 'Reemplazar solenoide de la transmisión').
+accion(reemplazar_balero_rueda, 'Reemplazar balero (rodamiento) de rueda').
+accion(reemplazar_sensor_tpms, 'Reemplazar sensor TPMS').
+accion(reemplazar_maza_rueda, 'Reemplazar maza de rueda').
+
+accion_componente(purgar_cambiar_liquido_frenos, liquido_frenos, 0.95).
+accion_componente(revisar_fugas_circuito_frenos, liquido_frenos, 0.50).
+accion_componente(revisar_fugas_circuito_frenos, manguera_freno, 0.70).
+accion_componente(revisar_fugas_circuito_frenos, cilindro_maestro_freno, 0.60).
+accion_componente(revisar_fugas_circuito_frenos, caliper_freno, 0.50).
+accion_componente(rectificar_discos, discos_freno, 0.85).
+accion_componente(rectificar_tambor, zapatas_tambor, 0.60).
+accion_componente(localizar_fugas_refrigerante, refrigerante, 0.50).
+accion_componente(localizar_fugas_refrigerante, manguera_radiador, 0.60).
+accion_componente(localizar_fugas_refrigerante, manguera_calefaccion, 0.60).
+accion_componente(localizar_fugas_refrigerante, nucleo_calefaccion, 0.50).
+accion_componente(localizar_fugas_refrigerante, bomba_agua, 0.50).
+accion_componente(localizar_fugas_refrigerante, radiador, 0.50).
+accion_componente(localizar_fugas_refrigerante, deposito_refrigerante, 0.50).
+accion_componente(rellenar_refrigerante, refrigerante, 0.80).
+accion_componente(rellenar_refrigerante, deposito_refrigerante, 0.70).
+accion_componente(reemplazar_tapon_radiador, radiador, 0.50).
+accion_componente(reemplazar_tapon_radiador, deposito_refrigerante, 0.30).
+accion_componente(desobstruir_radiador_condensador, radiador, 0.60).
+accion_componente(desobstruir_radiador_condensador, condensador_ac, 0.80).
+accion_componente(localizar_fugas_aceite, aceite_motor, 0.50).
+accion_componente(localizar_fugas_aceite, junta_tapa_valvulas, 0.60).
+accion_componente(localizar_fugas_aceite, valvula_pcv, 0.40).
+accion_componente(localizar_fugas_aceite, bomba_aceite, 0.40).
+accion_componente(rellenar_aceite_motor, aceite_motor, 0.70).
+accion_componente(detectar_fugas_recargar_ac, carga_refrigerante_ac, 0.85).
+accion_componente(detectar_fugas_recargar_ac, compresor_ac, 0.40).
+accion_componente(detectar_fugas_recargar_ac, condensador_ac, 0.50).
+accion_componente(detectar_fugas_recargar_ac, evaporador_ac, 0.30).
+accion_componente(limpiar_evaporador_ac, evaporador_ac, 0.70).
+accion_componente(localizar_fugas_combustible, tanque_combustible, 0.60).
+accion_componente(localizar_fugas_combustible, inyector_combustible, 0.40).
+accion_componente(localizar_fugas_combustible, bomba_combustible, 0.30).
+accion_componente(localizar_fugas_combustible, regulador_presion_combustible, 0.30).
+accion_componente(reemplazar_tapon_gasolina, sensor_presion_tanque, 0.60).
+accion_componente(reemplazar_tapon_gasolina, tanque_combustible, 0.40).
+accion_componente(sellar_fugas_escape, multiple_escape, 0.60).
+accion_componente(sellar_fugas_escape, junta_multiple_escape, 0.60).
+accion_componente(sellar_fugas_escape, catalizador, 0.30).
+accion_componente(reapretar_pernos, junta_tapa_valvulas, 0.50).
+accion_componente(reapretar_pernos, junta_multiple_escape, 0.50).
+accion_componente(reapretar_pernos, multiple_escape, 0.40).
+accion_componente(reapretar_pernos, soportes_motor, 0.40).
+accion_componente(reparar_cableado, modulo_abs, 0.60).
+accion_componente(reparar_cableado, sensor_velocidad_rueda, 0.60).
+accion_componente(reparar_cableado, sensor_oxigeno, 0.50).
+accion_componente(reparar_cableado, sensor_tps, 0.50).
+accion_componente(reparar_cableado, sensor_map, 0.40).
+accion_componente(reparar_cableado, sensor_detonacion, 0.40).
+accion_componente(reparar_cableado, sensor_presion_tanque, 0.30).
+accion_componente(reparar_cableado, solenoide_transmision, 0.50).
+accion_componente(reparar_cableado, ecu, 0.40).
+accion_componente(reparar_cableado, motor_vidrio_puerta, 0.50).
+accion_componente(reparar_cableado, actuador_seguro_puerta, 0.50).
+accion_componente(reparar_cableado, motor_limpiaparabrisas, 0.50).
+accion_componente(reparar_cableado, bomba_limpiaparabrisas, 0.50).
+accion_componente(reparar_cableado, claxon, 0.40).
+accion_componente(reparar_cableado, foco_faro, 0.50).
+accion_componente(reparar_cableado, sensor_tpms, 0.40).
+accion_componente(reparar_cableado, cables_bujias, 0.50).
+accion_componente(reemplazar_fusible_rele, modulo_abs, 0.50).
+accion_componente(reemplazar_fusible_rele, claxon, 0.80).
+accion_componente(reemplazar_fusible_rele, ventilador_radiador, 0.50).
+accion_componente(reemplazar_fusible_rele, motor_ventilador_hvac, 0.30).
+accion_componente(limpiar_terminales_bateria, bateria, 0.60).
+accion_componente(limpiar_terminales_bateria, motor_arranque, 0.30).
+accion_componente(cargar_bateria, bateria, 0.50).
+accion_componente(ajustar_tension_banda, banda_accesorios, 0.70).
+accion_componente(ajustar_tension_banda, sistema_carga, 0.50).
+accion_componente(ajustar_cable_embrague, cable_embrague, 0.80).
+accion_componente(purgar_embrague, cilindro_esclavo_embrague, 0.60).
+accion_componente(purgar_embrague, cilindro_maestro_embrague, 0.60).
+accion_componente(limpiar_cuerpo_aceleracion, cuerpo_aceleracion, 0.85).
+accion_componente(limpiar_cuerpo_aceleracion, valvula_iac, 0.85).
+accion_componente(limpiar_carbonilla_valvulas, valvula_admision, 0.70).
+accion_componente(limpiar_carbonilla_valvulas, valvula_escape, 0.70).
+accion_componente(ajustar_holgura_valvulas, valvula_admision, 0.70).
+accion_componente(ajustar_holgura_valvulas, valvula_escape, 0.70).
+accion_componente(limpiar_inyectores, inyector_combustible, 0.70).
+accion_componente(limpiar_inyectores, bomba_inyeccion_diesel, 0.40).
+accion_componente(reprogramar_ecu, ecu, 0.60).
+accion_componente(alinear_balancear, eje_y_llantas, 0.90).
+accion_componente(ajustar_presion_llantas, eje_y_llantas, 0.60).
+accion_componente(ajustar_presion_llantas, sensor_tpms, 0.60).
+accion_componente(alinear_tren_motriz, junta_universal, 0.60).
+accion_componente(rellenar_liquido_direccion, liquido_direccion, 0.80).
+accion_componente(rellenar_liquido_limpiaparabrisas, liquido_limpiaparabrisas, 0.90).
+accion_componente(rellenar_fluido_transmision, fluido_transmision, 0.70).
+accion_componente(rellenar_fluido_transmision, transmision_automatica, 0.40).
+accion_componente(rellenar_fluido_transmision, convertidor_par, 0.30).
+accion_componente(cambiar_aceite_diferenciales, diferencial, 0.70).
+accion_componente(cambiar_aceite_diferenciales, diferencial_central, 0.60).
+accion_componente(cambiar_aceite_diferenciales, engranes_conicos, 0.60).
+accion_componente(rellenar_liquido_embrague, cilindro_maestro_embrague, 0.50).
+accion_componente(rellenar_liquido_embrague, cilindro_esclavo_embrague, 0.40).
+accion_componente(lubricar_guia_vidrio, regulador_vidrio_puerta, 0.70).
+accion_componente(lubricar_guia_vidrio, motor_vidrio_puerta, 0.20).
+accion_componente(reemplazar_modulo_abs, modulo_abs, 0.95).
+accion_componente(reemplazar_sensor_velocidad_rueda, sensor_velocidad_rueda, 0.95).
+accion_componente(reemplazar_servofreno, servofreno, 0.95).
+accion_componente(reemplazar_caliper_freno, caliper_freno, 0.95).
+accion_componente(reemplazar_manguera_freno, manguera_freno, 0.95).
+accion_componente(reemplazar_cilindro_maestro_freno, cilindro_maestro_freno, 0.95).
+accion_componente(reemplazar_pastillas_freno, pastillas_freno, 0.95).
+accion_componente(reemplazar_discos_freno, discos_freno, 0.95).
+accion_componente(reemplazar_zapatas_tambor, zapatas_tambor, 0.95).
+accion_componente(reemplazar_compresor_ac, compresor_ac, 0.95).
+accion_componente(reemplazar_condensador_ac, condensador_ac, 0.95).
+accion_componente(reemplazar_evaporador_ac, evaporador_ac, 0.95).
+accion_componente(cambiar_filtro_cabina, filtro_cabina, 0.90).
+accion_componente(reemplazar_motor_ventilador_hvac, motor_ventilador_hvac, 0.95).
+accion_componente(reemplazar_resistencia_ventilador_hvac, resistencia_ventilador_hvac, 0.95).
+accion_componente(cambiar_refrigerante, refrigerante, 0.90).
+accion_componente(reemplazar_termostato, termostato, 0.95).
+accion_componente(reemplazar_nucleo_calefaccion, nucleo_calefaccion, 0.95).
+accion_componente(reemplazar_manguera_calefaccion, manguera_calefaccion, 0.95).
+accion_componente(reemplazar_ventilador_radiador, ventilador_radiador, 0.95).
+accion_componente(reemplazar_manguera_radiador, manguera_radiador, 0.95).
+accion_componente(reemplazar_bomba_agua, bomba_agua, 0.95).
+accion_componente(reemplazar_engranes_conicos, engranes_conicos, 0.95).
+accion_componente(reemplazar_diferencial_central, diferencial_central, 0.95).
+accion_componente(reemplazar_cable_embrague, cable_embrague, 0.95).
+accion_componente(reemplazar_cilindro_esclavo_embrague, cilindro_esclavo_embrague, 0.95).
+accion_componente(reemplazar_diferencial, diferencial, 0.95).
+accion_componente(reemplazar_eje_motriz, eje_motriz, 0.95).
+accion_componente(reemplazar_eje_rigido, eje_rigido, 0.95).
+accion_componente(reemplazar_transmision_automatica, transmision_automatica, 0.95).
+accion_componente(reemplazar_junta_universal, junta_universal, 0.95).
+accion_componente(reemplazar_acoplamiento_viscoso, acoplamiento_viscoso, 0.95).
+accion_componente(reemplazar_bateria, bateria, 0.95).
+accion_componente(reemplazar_sistema_carga, sistema_carga, 0.95).
+accion_componente(reemplazar_motor_vidrio_puerta, motor_vidrio_puerta, 0.95).
+accion_componente(reemplazar_regulador_vidrio_puerta, regulador_vidrio_puerta, 0.95).
+accion_componente(reemplazar_foco_faro, foco_faro, 0.95).
+accion_componente(reemplazar_tapa_distribuidor, tapa_distribuidor, 0.95).
+accion_componente(reemplazar_cables_bujias, cables_bujias, 0.95).
+accion_componente(reemplazar_actuador_seguro_puerta, actuador_seguro_puerta, 0.95).
+accion_componente(reemplazar_motor_arranque, motor_arranque, 0.95).
+accion_componente(reemplazar_bomba_limpiaparabrisas, bomba_limpiaparabrisas, 0.95).
+accion_componente(reemplazar_motor_limpiaparabrisas, motor_limpiaparabrisas, 0.95).
+accion_componente(reemplazar_valvula_purga_canister, valvula_purga_canister, 0.95).
+accion_componente(reemplazar_catalizador, catalizador, 0.95).
+accion_componente(reemplazar_canister_carbon, canister_carbon, 0.95).
+accion_componente(reemplazar_multiple_escape, multiple_escape, 0.95).
+accion_componente(reemplazar_junta_multiple_escape, junta_multiple_escape, 0.95).
+accion_componente(reemplazar_sensor_presion_tanque, sensor_presion_tanque, 0.95).
+accion_componente(reemplazar_sensor_detonacion, sensor_detonacion, 0.95).
+accion_componente(reemplazar_sensor_map, sensor_map, 0.95).
+accion_componente(reemplazar_sensor_oxigeno, sensor_oxigeno, 0.95).
+accion_componente(reemplazar_eje_balanceo, eje_balanceo, 0.95).
+accion_componente(reemplazar_presion_turbo, presion_turbo, 0.95).
+accion_componente(reemplazar_bomba_inyeccion_diesel, bomba_inyeccion_diesel, 0.95).
+accion_componente(reemplazar_bujia_incandescente, bujia_incandescente, 0.95).
+accion_componente(reemplazar_soportes_motor, soportes_motor, 0.95).
+accion_componente(reemplazar_valvula_escape, valvula_escape, 0.95).
+accion_componente(reemplazar_inyector_combustible, inyector_combustible, 0.95).
+accion_componente(reemplazar_valvula_iac, valvula_iac, 0.95).
+accion_componente(reemplazar_valvula_admision, valvula_admision, 0.95).
+accion_componente(reemplazar_bomba_aceite, bomba_aceite, 0.95).
+accion_componente(reemplazar_anillos_piston, anillos_piston, 0.95).
+accion_componente(reemplazar_banda_distribucion, banda_distribucion, 0.95).
+accion_componente(reemplazar_junta_tapa_valvulas, junta_tapa_valvulas, 0.95).
+accion_componente(reemplazar_banda_accesorios, banda_accesorios, 0.95).
+accion_componente(reemplazar_claxon, claxon, 0.95).
+accion_componente(cambiar_liquido_direccion, liquido_direccion, 0.90).
+accion_componente(reemplazar_eje_y_llantas, eje_y_llantas, 0.95).
+accion_componente(cambiar_filtro_aire, filtro_aire, 0.90).
+accion_componente(reemplazar_ecu, ecu, 0.95).
+accion_componente(cambiar_aceite_motor, aceite_motor, 0.90).
+accion_componente(cambiar_filtro_combustible, filtro_combustible, 0.90).
+accion_componente(reemplazar_valvula_pcv, valvula_pcv, 0.95).
+accion_componente(reemplazar_cuerpo_aceleracion, cuerpo_aceleracion, 0.95).
+accion_componente(reemplazar_regulador_presion_combustible, regulador_presion_combustible, 0.95).
+accion_componente(reemplazar_bomba_combustible, bomba_combustible, 0.95).
+accion_componente(reemplazar_tanque_combustible, tanque_combustible, 0.95).
+accion_componente(reemplazar_sensor_tps, sensor_tps, 0.95).
+accion_componente(reemplazar_deposito_refrigerante, deposito_refrigerante, 0.95).
+accion_componente(reemplazar_radiador, radiador, 0.95).
+accion_componente(cambiar_liquido_limpiaparabrisas, liquido_limpiaparabrisas, 0.90).
+accion_componente(reemplazar_cilindro_maestro_embrague, cilindro_maestro_embrague, 0.95).
+accion_componente(reemplazar_convertidor_par, convertidor_par, 0.95).
+accion_componente(cambiar_fluido_transmision, fluido_transmision, 0.90).
+accion_componente(cambiar_filtro_transmision, filtro_transmision, 0.90).
+accion_componente(reemplazar_solenoide_transmision, solenoide_transmision, 0.95).
+accion_componente(reemplazar_balero_rueda, balero_rueda, 0.95).
+accion_componente(reemplazar_sensor_tpms, sensor_tpms, 0.95).
+accion_componente(reemplazar_maza_rueda, maza_rueda, 0.95).
