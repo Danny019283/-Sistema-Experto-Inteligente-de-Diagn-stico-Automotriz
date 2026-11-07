@@ -39,7 +39,8 @@ deshacer(undo(Refs, Quitados)) :-
 test(valores_del_issue, [forall(member(N-V, [tau_alto-0.85, tau_bajo-0.05,
                                              max_iteraciones-5, alpha-1]))]) :-
     parametro(N, V).
-test(sin_duplicados, [forall(member(N, [tau_alto, tau_bajo, max_iteraciones, alpha]))]) :-
+test(tau_candidato) :- parametro(tau_candidato, 0.25).
+test(sin_duplicados, [forall(member(N, [tau_alto, tau_bajo, tau_candidato, max_iteraciones, alpha]))]) :-
     findall(V, parametro(N, V), [_]).
 :- end_tests(parametros).
 
@@ -255,6 +256,10 @@ test(max_iteraciones_invalido) :-
     reporta([parametro(max_iteraciones, 5)], [parametro(max_iteraciones, 0)], "max_iteraciones").
 test(alpha_invalido) :-
     reporta([parametro(alpha, 1)], [parametro(alpha, 0)], "alpha").
+test(tau_candidato_faltante) :-
+    reporta([parametro(tau_candidato, 0.25)], [], "falta el parámetro").
+test(tau_candidato_fuera_de_rango) :-
+    reporta([parametro(tau_candidato, 0.25)], [parametro(tau_candidato, 2)], "tau_candidato").
 
 test(reporta_todos_los_problemas) :-
     modificada([], [accion_componente(fantasma, bateria, 0.5), incompatibilidad(no_arranca, no_arranca)],

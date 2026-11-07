@@ -12,6 +12,9 @@
 % parametro(Nombre, Valor)
 parametro(tau_alto, 0.85).
 parametro(tau_bajo, 0.05).
+% Un incierto solo se investiga (foco) si tiene evidencia y P >= tau_candidato; sin esto los
+% componentes de prior alto pero sin relación con los síntomas (o con P ~ 15 %) alargarían el ciclo.
+parametro(tau_candidato, 0.25).
 parametro(max_iteraciones, 5).
 parametro(alpha, 1).
 

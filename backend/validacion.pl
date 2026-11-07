@@ -96,9 +96,9 @@ problema(P) :- incompatibilidad(A,A),
     msg("incompatibilidad(~q, ~q): un síntoma no es incompatible consigo mismo", [A,A], P).
 
 % ---- parámetros ----
-problema(P) :- member(N, [tau_alto, tau_bajo, max_iteraciones, alpha]), \+ parametro(N,_),
+problema(P) :- member(N, [tau_alto, tau_bajo, tau_candidato, max_iteraciones, alpha]), \+ parametro(N,_),
     msg("falta el parámetro ~q", [N], P).
-problema(P) :- member(N, [tau_alto, tau_bajo]), parametro(N,V), \+ prob(V),
+problema(P) :- member(N, [tau_alto, tau_bajo, tau_candidato]), parametro(N,V), \+ prob(V),
     msg("parámetro ~q: valor fuera de [0, 1]: ~q", [N,V], P).
 problema(P) :- parametro(tau_alto,A), parametro(tau_bajo,B), prob(A), prob(B), B >= A,
     msg("parámetro tau_bajo (~q) debe ser menor que tau_alto (~q)", [B,A], P).
