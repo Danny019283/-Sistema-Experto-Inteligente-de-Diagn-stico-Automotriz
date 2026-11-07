@@ -729,4 +729,21 @@ llama(M, De, A) :- De = Nom/Ar, functor(H, Nom, Ar), clause(M:H, B), sub_term(G,
     A = N2/Ar2, functor(G, N2, Ar2), !.
 test(ciclo_es_mutuamente_recursivo) :-
     llama(reglas, ciclo/2, paso/3), llama(reglas, paso/3, ciclo/2).
+test(al_menos_5_reglas_compuestas) :-       % cuerpo con 3 o más condiciones en conjunción
+    aggregate_all(count, ( member(M, [inferencia, reglas, consultas]),
+                           current_predicate(M:Nom/Ar), functor(H, Nom, Ar),
+                           \+ predicate_property(M:H, imported_from(_)),
+                           clause(M:H, B), conjuncion(B, K), K >= 3 ), N),
+    N >= 5.
+test(al_menos_3_operaciones_con_listas) :-
+    Ops = [append, member, memberchk, length, sort, msort, reverse, intersection, partition,
+           exclude, maplist, select, nth0, findall],
+    aggregate_all(count, ( member(Op, Ops), usa_op(Op) ), N),
+    N >= 3.
+conjuncion((A, B), K) :- !, conjuncion(A, Ka), conjuncion(B, Kb), K is Ka + Kb.
+conjuncion(_, 1).
+usa_op(Op) :-
+    member(M, [inferencia, reglas, consultas]), current_predicate(M:Nom/Ar), functor(H, Nom, Ar),
+    \+ predicate_property(M:H, imported_from(_)), \+ predicate_property(M:H, built_in),
+    clause(M:H, B), sub_term(G, B), callable(G), functor(G, Op, _), !.
 :- end_tests(minimos_seccion5).
