@@ -26,7 +26,7 @@ test:
 	@command -v swipl >/dev/null || { echo "Falta swipl (SWI-Prolog)."; exit 1; }
 	swipl -q -g run_tests -t halt pruebas/pruebas_prolog.pl
 	$(CC) -std=gnu11 -Wall -Wextra -w -Ifrontend -Iintegracion -Iintegracion/vendor -o $(TEST_C) \
-	    $(TEST_C).c frontend/controlador.c integracion/conexion.c integracion/vendor/cJSON.c -lm
+	    $(TEST_C).c frontend/controlador.c frontend/menu.c frontend/validaciones.c integracion/conexion.c integracion/vendor/cJSON.c -lm
 	./$(TEST_C) backend/servidor_json.pl pruebas/servidor_kb_rota.pl 2>/dev/null
 
 clean:
