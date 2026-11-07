@@ -1,5 +1,6 @@
 :- use_module(library(plunit)).
 :- use_module('../backend/servidor_json').
+:- use_module('../backend/validacion').
 
 :- begin_tests(contrato_base).
 test(ping) :-
@@ -67,7 +68,7 @@ test(estados_suman_conteos_del_componente,
 test(fila_de_hallazgo_tiene_prueba_componente,
      [forall((componente_sintoma(C, H, _, _, _), sintoma(H, _, hallazgo),
               atom_concat(hall_, P, H)))]) :-
-    prueba_componente(P, C).
+    prueba_componente(P, C), !.
 :- end_tests(arranque).
 
 % ---------------------------------------------------------------------------
@@ -164,3 +165,99 @@ test(frenos_se_relacionan_con_sus_sintomas,
     componente_sintoma(C, S, presente, _, _),
     memberchk(C, [pastillas_freno, discos_freno, liquido_frenos]), !.
 :- end_tests(frenos).
+
+% ---------------------------------------------------------------------------
+% validar_kb/0,1: detecta una KB inválida. Cada test daña la KB y la restaura.
+% ---------------------------------------------------------------------------
+:- begin_tests(validar_kb).
+
+modificada(Quitar, Agregar, Meta) :-
+    setup_call_cleanup(modificar(Quitar, Agregar, U), Meta, deshacer(U)).
+modificar(Quitar, Agregar, undo(Refs, Quitar)) :-
+    forall(member(H, Quitar), clause(user:H, true, _)),
+    forall(member(H, Quitar), (clause(user:H, true, R), erase(R))),
+    findall(R, (member(H, Agregar), assertz(user:H, R)), Refs).
+deshacer(undo(Refs, Quitados)) :-
+    forall(member(R, Refs), erase(R)),
+    forall(member(H, Quitados), assertz(user:H)).
+
+% Con Quitar/Agregar aplicados, validar_kb/1 debe reportar un problema que contenga Fragmento.
+reporta(Quitar, Agregar, Fragmento) :-
+    modificada(Quitar, Agregar,
+               ( validar_kb(Ps), member(P, Ps), sub_string(P, _, _, _, Fragmento) )), !.
+
+test(kb_actual_valida)      :- validar_kb([]).
+test(validar_kb_0_exito)    :- validar_kb.
+test(validar_kb_0_falla_si_invalida, [fail]) :-
+    modificada([], [sintoma(luz_abs_encendida, dup, sintoma)], validar_kb).
+
+test(sintoma_duplicado)    :- reporta([], [sintoma(luz_abs_encendida, dup, sintoma)], "id duplicado").
+test(componente_duplicado) :- reporta([], [componente(bateria, dup, 1, 1)], "id duplicado").
+test(accion_duplicada)     :- reporta([], [accion(cargar_bateria, dup)], "id duplicado").
+test(prueba_duplicada)     :- reporta([], [prueba(medir_voltaje_bateria, dup)], "id duplicado").
+test(fila_duplicada) :-
+    reporta([], [componente_sintoma(bateria, arranque_lento, presente, 24, 48)], "id duplicado").
+test(parametro_duplicado)  :- reporta([], [parametro(alpha, 2)], "id duplicado").
+
+test(ref_componente_inexistente) :-
+    reporta([], [componente_sintoma(fantasma, arranque_lento, presente, 1, 1)], "inexistente").
+test(ref_sintoma_inexistente) :-
+    reporta([], [componente_sintoma(bateria, fantasma, presente, 1, 1)], "inexistente").
+test(ref_accion_inexistente) :-
+    reporta([], [accion_componente(fantasma, bateria, 0.5)], "inexistente").
+test(ref_prueba_inexistente) :-
+    reporta([], [prueba_componente(fantasma, bateria)], "inexistente").
+test(ref_prueba_sintoma_inexistente) :-
+    reporta([], [prueba_sintoma(medir_voltaje_bateria, fantasma, 0.5)], "inexistente").
+
+test(efectividad_fuera_de_rango) :-
+    reporta([], [accion_componente(cargar_bateria, motor_arranque, 1.5)], "fuera de [0, 1]").
+test(relevancia_fuera_de_rango) :-
+    reporta([], [prueba_sintoma(medir_voltaje_bateria, no_arranca, -0.1)], "fuera de [0, 1]").
+
+test(conteo_negativo_componente) :-
+    reporta([componente(motor_arranque, 'Motor de arranque', 40, 960)],
+            [componente(motor_arranque, 'Motor de arranque', -1, 960)], "conteo inválido").
+test(conteo_no_entero_relacion) :-
+    reporta([], [componente_sintoma(bateria, no_arranca, presente, 1.5, 1)], "conteo inválido").
+test(conteo_excede_al_componente) :-
+    reporta([], [componente_sintoma(bateria, no_arranca, presente, 41, 1)], "excede").
+
+test(estado_invalido_sintoma) :-
+    reporta([], [componente_sintoma(bateria, no_arranca, leve, 1, 1)], "estado inválido").
+test(estado_invalido_hallazgo) :-
+    reporta([], [componente_sintoma(bateria, hall_probar_rele_arranque, presente, 1, 1)],
+            "estado inválido").
+test(hallazgo_sin_tres_estados) :-
+    reporta([], [componente_sintoma(bateria, hall_probar_rele_arranque, normal, 1, 1)],
+            "estados").
+test(estados_no_suman_conteos) :-
+    reporta([componente_sintoma(rele_arranque, hall_medir_voltaje_bateria, leve, 3, 143)],
+            [componente_sintoma(rele_arranque, hall_medir_voltaje_bateria, leve, 4, 143)], "suman").
+
+test(incompatibilidad_con_sintoma_inexistente) :-
+    reporta([], [incompatibilidad(no_arranca, fantasma)], "síntoma existente").
+test(incompatibilidad_con_hallazgo) :-
+    reporta([], [incompatibilidad(no_arranca, hall_medir_voltaje_bateria)], "síntoma existente").
+test(incompatibilidad_consigo_mismo) :-
+    reporta([], [incompatibilidad(no_arranca, no_arranca)], "consigo mismo").
+
+test(parametro_faltante) :-
+    reporta([parametro(alpha, 1)], [], "falta el parámetro").
+test(tau_fuera_de_rango) :-
+    reporta([parametro(tau_alto, 0.85)], [parametro(tau_alto, 1.5)], "tau_alto").
+test(tau_bajo_no_menor_que_alto) :-
+    reporta([parametro(tau_bajo, 0.05)], [parametro(tau_bajo, 0.9)], "tau_bajo").
+test(max_iteraciones_invalido) :-
+    reporta([parametro(max_iteraciones, 5)], [parametro(max_iteraciones, 0)], "max_iteraciones").
+test(alpha_invalido) :-
+    reporta([parametro(alpha, 1)], [parametro(alpha, 0)], "alpha").
+
+test(reporta_todos_los_problemas) :-
+    modificada([], [accion_componente(fantasma, bateria, 0.5), incompatibilidad(no_arranca, no_arranca)],
+               ( validar_kb(Ps), length(Ps, N), N >= 2 )).
+test(la_kb_queda_restaurada) :-
+    aggregate_all(count, componente(_,_,_,_), A),
+    ( modificada([], [componente(bateria, dup, 1, 1)], true) -> true ; true ),
+    aggregate_all(count, componente(_,_,_,_), A).
+:- end_tests(validar_kb).

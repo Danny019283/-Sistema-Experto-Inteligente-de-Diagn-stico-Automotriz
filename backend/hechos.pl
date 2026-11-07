@@ -3,6 +3,10 @@
 % ============================================================
 :- encoding(utf8).
 :- discontiguous sintoma/3.
+% dynamic: los tests dañan la KB con assertz/erase para probar validar_kb.
+:- dynamic sintoma/3, componente/4, componente_sintoma/5, accion/2, accion_componente/3,
+          prueba/2, prueba_sintoma/3, prueba_componente/2, incompatibilidad/2, parametro/2.
+:- use_module(validacion).
 
 % ---------- Parámetros del motor ----------
 % parametro(Nombre, Valor)
@@ -1843,3 +1847,6 @@ componente_sintoma(sensor_tps, hall_probar_sensor_posicion_acelerador_tps, sever
 componente_sintoma(bomba_agua, hall_probar_funcionamiento_bomba_agua, normal, 1, 818).
 componente_sintoma(bomba_agua, hall_probar_funcionamiento_bomba_agua, leve, 3, 95).
 componente_sintoma(bomba_agua, hall_probar_funcionamiento_bomba_agua, severo, 36, 47).
+
+% RNF-01: se valida al cargar; los problemas salen por stderr (el servidor los reporta como kb_invalida).
+:- initialization(validar_kb).
