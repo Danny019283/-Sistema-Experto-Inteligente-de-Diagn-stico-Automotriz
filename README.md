@@ -53,7 +53,8 @@ Respuesta:
 - `entrada_invalida` (solo `diagnosticar`): síntomas inexistentes, estados fuera de rango,
   repetidos, hallazgos de pruebas inexistentes o `sintomas`/`hallazgos` que no son objetos;
   añade `error.problemas` (lista de textos).
-- Operaciones: `ping` → `[{"mensaje": "pong"}]`; `diagnosticar` (abajo).
+- Operaciones: `ping` → `[{"mensaje": "pong"}]`; `diagnosticar`, `registrar_vehiculo` y
+  `consultar_vehiculo` (abajo).
 
 ### `diagnosticar`
 
@@ -71,6 +72,20 @@ Un resultado (`resultados[0]`): `concluyente`, `motivo` (`sin_inciertos`, `max_i
 `explicacion`, `traza` (apilar / prueba / rb1 / rb3), `pruebas_hechas`. Un resultado no
 concluyente no es un error: pide la prueba de `pruebas_sugeridas[0]`; el cliente la repite con
 su hallazgo. Solo se investigan los inciertos con evidencia y P ≥ `tau_candidato` (0,25).
+
+### `registrar_vehiculo` / `consultar_vehiculo`
+
+```
+{"id": 3, "op": "registrar_vehiculo", "args": {"marca": "Toyota", "modelo": "Corolla",
+  "anio": 2015, "motor": "1.8 L 4 cil", "combustible": "gasolina", "kilometraje": 120000}}
+```
+Guarda `vehiculo/6` (hecho dinámico, un solo registro: registrar de nuevo reemplaza el anterior) y
+devuelve el vehículo en `resultados[0]`. `consultar_vehiculo` (sin args) devuelve el registrado o
+`sin_resultados`. Validación (RNF-01): `marca`, `modelo`, `motor` texto no vacío de ≤ 40 caracteres
+sin caracteres de control (se recortan los espacios de los extremos); `anio` entero entre 1950 y
+el año actual + 1; `kilometraje` entero entre 0 y 3 000 000; `combustible`: `gasolina | diesel |
+hibrido | electrico | gas`. Si algo falla: `entrada_invalida` con un `"campo: motivo"` por campo
+inválido y el registro anterior queda intacto.
 
 El cliente C correlaciona la respuesta por `id` y trata swipl caído / timeout (5 s) /
 respuesta inválida como error de conexión, mostrado en la ventana con botón «Reintentar».
