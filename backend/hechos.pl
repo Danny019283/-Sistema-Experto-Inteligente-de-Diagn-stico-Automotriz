@@ -4,6 +4,13 @@
 :- encoding(utf8).
 :- discontiguous sintoma/3.
 
+% ---------- Parámetros del motor ----------
+% parametro(Nombre, Valor)
+parametro(tau_alto, 0.85).
+parametro(tau_bajo, 0.05).
+parametro(max_iteraciones, 5).
+parametro(alpha, 1).
+
 % ---------- Síntomas ----------
 % sintoma(Id, Nombre, Tipo)   Tipo: sintoma | hallazgo
 % (los hallazgos —resultado de una prueba— se agregan junto con las pruebas)

@@ -19,3 +19,13 @@ test(args_invalidos) :-
     procesar_linea("{\"id\":5,\"op\":\"ping\",\"args\":[1]}", R),
     R.error.codigo == args_invalidos.
 :- end_tests(contrato_base).
+
+:- consult('../backend/hechos').
+
+:- begin_tests(parametros).
+test(valores_del_issue, [forall(member(N-V, [tau_alto-0.85, tau_bajo-0.05,
+                                             max_iteraciones-5, alpha-1]))]) :-
+    parametro(N, V).
+test(sin_duplicados, [forall(member(N, [tau_alto, tau_bajo, max_iteraciones, alpha]))]) :-
+    findall(V, parametro(N, V), [_]).
+:- end_tests(parametros).
