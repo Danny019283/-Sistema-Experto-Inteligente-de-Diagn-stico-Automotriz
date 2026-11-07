@@ -11,6 +11,13 @@ parametro(tau_bajo, 0.05).
 parametro(max_iteraciones, 5).
 parametro(alpha, 1).
 
+% ---------- Incompatibilidades ----------
+% incompatibilidad(SintomaA, SintomaB)   síntomas que no pueden darse a la vez (cada par una sola vez).
+incompatibilidad(no_arranca, ralenti_inestable).
+incompatibilidad(no_arranca, se_apaga_ralenti).
+incompatibilidad(ac_no_funciona, ac_no_enfria).
+incompatibilidad(motor_no_gira, arranque_lento).
+
 % ---------- Síntomas ----------
 % sintoma(Id, Nombre, Tipo)   Tipo: sintoma | hallazgo
 % (los hallazgos —resultado de una prueba— se agregan junto con las pruebas)

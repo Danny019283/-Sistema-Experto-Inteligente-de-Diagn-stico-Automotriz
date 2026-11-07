@@ -29,3 +29,13 @@ test(valores_del_issue, [forall(member(N-V, [tau_alto-0.85, tau_bajo-0.05,
 test(sin_duplicados, [forall(member(N, [tau_alto, tau_bajo, max_iteraciones, alpha]))]) :-
     findall(V, parametro(N, V), [_]).
 :- end_tests(parametros).
+
+:- begin_tests(incompatibilidades).
+test(al_menos_cuatro) :-
+    aggregate_all(count, incompatibilidad(_, _), N), N >= 4.
+test(extremos_son_sintomas, [forall(incompatibilidad(A, B))]) :-
+    sintoma(A, _, sintoma), sintoma(B, _, sintoma), A \== B.
+test(sin_pares_repetidos, [forall(incompatibilidad(A, B))]) :-
+    \+ incompatibilidad(B, A),
+    findall(x, incompatibilidad(A, B), [_]).
+:- end_tests(incompatibilidades).
