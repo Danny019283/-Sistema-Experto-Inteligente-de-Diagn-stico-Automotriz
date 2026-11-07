@@ -1,6 +1,7 @@
 :- use_module(library(plunit)).
 :- use_module('../backend/servidor_json').
 :- use_module('../backend/validacion').
+:- use_module('../backend/inferencia').
 :- ensure_loaded('../backend/hechos').
 
 :- begin_tests(contrato_base).
@@ -366,3 +367,60 @@ test(acciones_del_resultado_final) :-
     cerca(1 - (1 - 0.93 * M1), 0.88, 0.01),
     cerca(1 - (1 - 0.93 * M2), 0.47, 0.01), !.
 :- end_tests(pdf_seccion6).
+
+% ---------------------------------------------------------------------------
+% F02 capa 1: Naive Bayes + Laplace en log-odds (backend/inferencia.pl).
+% ---------------------------------------------------------------------------
+:- begin_tests(capa1).
+cerca(X, Y, Tol) :- abs(X - Y) =< Tol.
+entrada([chirrido_frenos-presente, pedal_freno_esponjoso-presente]).
+
+test(estado_inicial_63_44_31,
+     [forall(member(C-Esp, [pastillas_freno-0.63, liquido_frenos-0.44, discos_freno-0.31]))]) :-
+    entrada(X), probabilidad(C, X, P), cerca(P, Esp, 0.02),
+    estado_componente(P, incierto).
+test(verosimilitud_laplace) :-
+    verosimilitud(liquido_frenos, pedal_freno_esponjoso, presente, PP-PN),
+    cerca(PP, 86/101, 1.0e-9), cerca(PN, 85/903, 1.0e-9).
+test(hallazgo_usa_tres_estados) :-      % |Vi| = 3
+    componente_sintoma(pastillas_freno, hall_medir_espesor_pastillas_freno, normal, P, N),
+    componente(pastillas_freno, _, Np, Nn),
+    verosimilitud(pastillas_freno, hall_medir_espesor_pastillas_freno, normal, PP-PN),
+    cerca(PP, (P + 1) / (Np + 3), 1.0e-9), cerca(PN, (N + 1) / (Nn + 3), 1.0e-9), !.
+test(iteracion_1_pastillas_refutada) :-
+    entrada(X),
+    probabilidad(pastillas_freno, [hall_medir_espesor_pastillas_freno-normal|X], P),
+    cerca(P, 0.039, 0.005), estado_componente(P, descartado).
+test(iteracion_2_liquido_confirmado) :-
+    entrada(X),
+    probabilidad(liquido_frenos, [hall_revisar_nivel_estado_liquido_frenos-severo|X], P),
+    cerca(P, 0.93, 0.02), estado_componente(P, confirmado).
+test(iteracion_3_discos_descartado) :-
+    entrada(X),
+    probabilidad(discos_freno, [hall_inspeccionar_disco_rayaduras_alabeo-normal|X], P),
+    cerca(P, 0.025, 0.005), estado_componente(P, descartado).
+test(desconocido_no_entra) :-
+    entrada(X), probabilidad(pastillas_freno, X, P),
+    probabilidad(pastillas_freno, [luz_abs_encendida-desconocido|X], P).
+test(ausente_excluye) :-
+    probabilidad(pastillas_freno, [chirrido_frenos-ausente], A),
+    probabilidad(pastillas_freno, [], Prior), A < Prior.
+test(sintoma_sin_fila_no_aporta) :-
+    probabilidad(discos_freno, [], P0),
+    probabilidad(discos_freno, [luz_abs_encendida-presente], P0).
+test(contribuciones_explican_el_logit) :-
+    entrada(X), contribuciones(liquido_frenos, X, Cs),
+    memberchk(pedal_freno_esponjoso-L, Cs), cerca(L, log(9.0), 0.1).
+test(sin_ln_cero_con_conteos_extremos) :-
+    modificada([componente_sintoma(liquido_frenos, chirrido_frenos, presente, 19, 225)],
+               [componente_sintoma(liquido_frenos, chirrido_frenos, presente, 0, 0)],
+               ( contribucion(liquido_frenos, chirrido_frenos, ausente, L), number(L) )).
+test(cambiar_un_conteo_cambia_el_resultado) :-
+    entrada(X), probabilidad(liquido_frenos, X, P0),
+    modificada([componente_sintoma(liquido_frenos, pedal_freno_esponjoso, presente, 85, 84)],
+               [componente_sintoma(liquido_frenos, pedal_freno_esponjoso, presente, 10, 84)],
+               ( probabilidad(liquido_frenos, X, P1), P1 < P0 )).
+test(umbrales, [forall(member(P-E, [0.85-confirmado, 0.9-confirmado, 0.05-descartado,
+                                    0.01-descartado, 0.5-incierto]))]) :-
+    estado_componente(P, E).
+:- end_tests(capa1).
