@@ -3,6 +3,7 @@
 :- use_module('../backend/validacion').
 :- use_module('../backend/inferencia').
 :- use_module('../backend/reglas').
+:- use_module('../backend/consultas').
 :- ensure_loaded('../backend/hechos').
 
 :- begin_tests(contrato_base).
@@ -662,3 +663,70 @@ test(con_la_kb_rota_responde_kb_invalida) :-
                ( pdf_args(A), diag(A, R) )),
     R.error.codigo == kb_invalida.
 :- end_tests(op_diagnosticar).
+
+% ---------------------------------------------------------------------------
+% F02 consultas.pl (≥10 consultas distintas) y mínimos de la sección 5.
+% ---------------------------------------------------------------------------
+:- begin_tests(consultas).
+test(sintomas_de) :- sintomas_de(liquido_frenos, Ss),
+    memberchk(pedal_freno_esponjoso, Ss), \+ ( member(S, Ss), sintoma(S, _, hallazgo) ).
+test(componentes_de) :- componentes_de(pedal_freno_esponjoso, Cs),
+    memberchk(liquido_frenos, Cs), memberchk(pastillas_freno, Cs), memberchk(discos_freno, Cs).
+test(pruebas_para) :- pruebas_para(pastillas_freno, Ps), memberchk(medir_espesor_pastillas_freno, Ps).
+test(componentes_de_prueba) :-
+    componentes_de_prueba(medir_voltaje_bateria, Cs), memberchk(rele_arranque, Cs).
+test(sintomas_de_prueba) :-
+    sintomas_de_prueba(medir_espesor_pastillas_freno, Ss), memberchk(chirrido_frenos-0.70, Ss).
+test(acciones_para_ordenadas) :-
+    acciones_para(liquido_frenos, [M1-purgar_cambiar_liquido_frenos, M2-_|_]), M1 >= M2.
+test(mejor_accion) :- mejor_accion(liquido_frenos, purgar_cambiar_liquido_frenos).
+test(mejor_accion_sin_acciones_falla, [fail]) :- mejor_accion(componente_inexistente, _).
+test(incompatibles_en_ambos_sentidos) :-
+    incompatibles_con(no_arranca, A), memberchk(ralenti_inestable, A),
+    incompatibles_con(ralenti_inestable, B), memberchk(no_arranca, B).
+test(prior_del_pdf) :- prior(pastillas_freno, P), abs(P - 0.40) < 0.01.
+test(sintomas_comunes) :-
+    sintomas_comunes(liquido_frenos, pastillas_freno, Ss), memberchk(chirrido_frenos, Ss).
+test(componentes_sin_pruebas_es_lista) :- componentes_sin_pruebas(Cs), is_list(Cs).
+test(mas_probables) :-
+    componentes_mas_probables([chirrido_frenos-presente, pedal_freno_esponjoso-presente], 2,
+                              [_-pastillas_freno, _-liquido_frenos]).
+test(hallazgos_de_prueba) :-
+    hallazgos_de_prueba(medir_espesor_pastillas_freno, Hs), memberchk(normal, Hs).
+test(consultas_calculan_sobre_la_kb) :-
+    modificada([], [prueba_componente(medir_voltaje_bateria, discos_freno)],
+               ( componentes_de_prueba(medir_voltaje_bateria, Cs), memberchk(discos_freno, Cs) )).
+:- end_tests(consultas).
+
+% Sección 5 (issue #55): mínimos medibles sobre el código.
+:- begin_tests(minimos_seccion5).
+propios(M, N) :-
+    aggregate_all(count, ( current_predicate(M:Nom/Ar), functor(H, Nom, Ar),
+                           \+ predicate_property(M:H, imported_from(_)),
+                           predicate_property(M:H, number_of_clauses(_)) ), N).
+test(al_menos_15_predicados_propios) :-
+    propios(inferencia, A), propios(reglas, B), propios(consultas, C), A + B + C >= 15.
+test(al_menos_13_consultas_distintas) :-
+    module_property(consultas, exports(Es)), length(Es, N), N >= 10.
+test(al_menos_20_reglas_logicas) :-
+    aggregate_all(count, ( member(M, [inferencia, reglas, consultas]),
+                           current_predicate(M:Nom/Ar), functor(H, Nom, Ar),
+                           \+ predicate_property(M:H, imported_from(_)),
+                           clause(M:H, Body), Body \== true ), N), N >= 20.
+test(al_menos_2_reglas_recursivas) :-
+    aggregate_all(count, ( member(M, [inferencia, reglas, consultas]),
+                           current_predicate(M:Nom/Ar), functor(H, Nom, Ar),
+                           \+ predicate_property(M:H, imported_from(_)),
+                           clause(M:H, B), sub_term(G, B), callable(G), functor(G, Nom, Ar) ),
+                  N),
+    N >= 2.
+test(los_recursivos_clave_existen, [forall(member(M:P, [inferencia:sumar/2, inferencia:complemento/2,
+                                                        reglas:primer_candidato/5]))]) :-
+    P = Nom/Ar, functor(H, Nom, Ar), clause(M:H, B), sub_term(G, B), callable(G),
+    functor(G, Nom, Ar), !.
+% El ciclo es mutuamente recursivo: ciclo/2 -> foco/paso -> ciclo/2.
+llama(M, De, A) :- De = Nom/Ar, functor(H, Nom, Ar), clause(M:H, B), sub_term(G, B), callable(G),
+    A = N2/Ar2, functor(G, N2, Ar2), !.
+test(ciclo_es_mutuamente_recursivo) :-
+    llama(reglas, ciclo/2, paso/3), llama(reglas, paso/3, ciclo/2).
+:- end_tests(minimos_seccion5).
