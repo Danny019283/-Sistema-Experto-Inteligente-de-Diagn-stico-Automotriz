@@ -424,3 +424,51 @@ test(umbrales, [forall(member(P-E, [0.85-confirmado, 0.9-confirmado, 0.05-descar
                                     0.01-descartado, 0.5-incierto]))]) :-
     estado_componente(P, E).
 :- end_tests(capa1).
+
+% ---------------------------------------------------------------------------
+% F02 capas 2 y 3: noisy-OR (pruebas y acciones).
+% ---------------------------------------------------------------------------
+:- begin_tests(capas23).
+cerca(X, Y, Tol) :- abs(X - Y) =< Tol.
+entrada([chirrido_frenos-presente, pedal_freno_esponjoso-presente]).
+
+test(rp_un_sintoma_presente) :-
+    relevancia_prueba(medir_espesor_pastillas_freno, [chirrido_frenos-presente], R),
+    cerca(R, 0.70, 1.0e-9).
+test(rp_noisy_or_de_dos_sintomas) :-      % 1 - (1-0.70)(1-0.70) = 0.91
+    relevancia_prueba(medir_espesor_pastillas_freno,
+                      [chirrido_frenos-presente, pedal_freno_pulsa-presente], R),
+    cerca(R, 0.91, 1.0e-9).
+test(rp_solo_cuentan_los_presentes) :-
+    relevancia_prueba(medir_espesor_pastillas_freno,
+                      [chirrido_frenos-ausente, pedal_freno_pulsa-desconocido], R),
+    R =:= 0.
+test(rp_prueba_inexistente_falla, [fail]) :-
+    relevancia_prueba(no_existe, [], _).
+test(pruebas_ordenadas_y_sin_las_hechas) :-
+    entrada(X),
+    pruebas_del_componente(pastillas_freno, X, [], L),
+    L = [R1-medir_espesor_pastillas_freno|_], R1 > 0,
+    pruebas_del_componente(pastillas_freno, X, [medir_espesor_pastillas_freno], L2),
+    \+ memberchk(_-medir_espesor_pastillas_freno, L2),
+    msort(L, M), reverse(M, Desc), pairs_keys(Desc, Ks), pairs_keys(L, Ks).
+test(ra_del_pdf_88_y_47) :-
+    Conf = [liquido_frenos-0.93],
+    relevancia_accion(purgar_cambiar_liquido_frenos, Conf, A),
+    relevancia_accion(revisar_fugas_circuito_frenos, Conf, B),
+    cerca(A, 0.88, 0.01), cerca(B, 0.47, 0.01).
+test(ra_sin_confirmados_es_cero) :-
+    relevancia_accion(purgar_cambiar_liquido_frenos, [], R), R =:= 0.
+test(ra_ignora_componentes_que_la_accion_no_atiende) :-
+    relevancia_accion(purgar_cambiar_liquido_frenos, [pastillas_freno-0.99], R), R =:= 0.
+test(ra_noisy_or_de_dos_componentes) :-   % 1 - (1-0.9*0.8)(1-0.9*0.5)
+    accion_componente(rellenar_liquido_embrague, cilindro_maestro_embrague, M1),
+    accion_componente(rellenar_liquido_embrague, cilindro_esclavo_embrague, M2),
+    relevancia_accion(rellenar_liquido_embrague,
+                      [cilindro_maestro_embrague-0.9, cilindro_esclavo_embrague-0.9], R),
+    cerca(R, 1 - (1 - 0.9 * M1) * (1 - 0.9 * M2), 1.0e-9), !.
+test(acciones_ordenadas_de_mayor_a_menor) :-
+    acciones_ordenadas([liquido_frenos-0.93], L),
+    L = [R1-purgar_cambiar_liquido_frenos, R2-_|_], R1 >= R2,
+    \+ ( member(R-_, L), R =< 0 ).
+:- end_tests(capas23).

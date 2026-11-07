@@ -3,7 +3,9 @@
 % X (memoria de trabajo) es una lista de Sintoma-Estado, Estado = presente|ausente|desconocido
 % para síntomas, o un estado del hallazgo (normal|leve|severo).
 :- module(inferencia, [verosimilitud/4, contribucion/4, contribuciones/3, logit/3,
-                       probabilidad/3, estado_componente/2, sumar/2]).
+                       probabilidad/3, estado_componente/2, sumar/2,
+                       relevancia_prueba/3, pruebas_del_componente/4,
+                       relevancia_accion/3, acciones_ordenadas/2]).
 
 % RNF-01: las probabilidades se acotan para que ln(0) no pueda ocurrir.
 epsilon(1.0e-9).
@@ -57,3 +59,33 @@ estado_componente(P, Estado) :-
     ;   P =< Bajo -> Estado = descartado
     ;   Estado = incierto
     ).
+
+% ---------- Capa 2: síntomas -> pruebas (noisy-OR, PDF §2.2) ----------
+% Complemento por recursión: producto de (1 - Ti) sobre una lista de términos Ti.
+complemento([], 1).
+complemento([T|Ts], Pr) :- complemento(Ts, Pr0), Pr is Pr0 * (1 - T).
+
+% relevancia_prueba(+Prueba, +X, -Rp): Rp = 1 - prod(1 - xs*Aps), xs = 1 si el síntoma está presente.
+relevancia_prueba(Prueba, X, R) :-
+    prueba(Prueba, _),
+    findall(A, ( prueba_sintoma(Prueba, S, A), memberchk(S-presente, X) ), As),
+    complemento(As, Pr), R is 1 - Pr.
+
+% pruebas_del_componente(+C, +X, +Hechas, -Lista): R-Prueba de las pruebas que verifican C,
+% sin las ya realizadas, de mayor a menor relevancia.
+pruebas_del_componente(C, X, Hechas, Lista) :-
+    findall(R-P, ( prueba_componente(P, C), \+ memberchk(P, Hechas), relevancia_prueba(P, X, R) ), L0),
+    sort(1, @>=, L0, Lista).
+
+% ---------- Capa 3: componentes -> acciones (noisy-OR, PDF §2.3) ----------
+% relevancia_accion(+Accion, +Confirmados, -Ra): Confirmados = lista C-P (P = P(C|S)).
+% Ra = 1 - prod(1 - P*Maj) solo sobre los componentes confirmados que la acción atiende.
+relevancia_accion(Accion, Confirmados, R) :-
+    accion(Accion, _),
+    findall(T, ( member(C-P, Confirmados), accion_componente(Accion, C, M), T is P * M ), Ts),
+    complemento(Ts, Pr), R is 1 - Pr.
+
+% acciones_ordenadas(+Confirmados, -Lista): R-Accion con R > 0, de mayor a menor.
+acciones_ordenadas(Confirmados, Lista) :-
+    findall(R-A, ( accion(A, _), relevancia_accion(A, Confirmados, R), R > 0 ), L0),
+    sort(1, @>=, L0, Lista).
