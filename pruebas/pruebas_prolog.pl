@@ -524,3 +524,85 @@ test(confirmados_con_probabilidad) :-
     entrada(X0), X = [hall_revisar_nivel_estado_liquido_frenos-severo|X0],
     confirmados(X, Conf), memberchk(liquido_frenos-P, Conf), P >= 0.85.
 :- end_tests(reglas_base).
+
+% ---------------------------------------------------------------------------
+% F02 ciclo R1-R11: traza del PDF §6, parada, pruebas pendientes y casos límite.
+% ---------------------------------------------------------------------------
+:- begin_tests(ciclo).
+cerca(X, Y, Tol) :- abs(X - Y) =< Tol.
+sintomas([chirrido_frenos-presente, pedal_freno_esponjoso-presente]).
+hallazgos([hall_medir_espesor_pastillas_freno-normal,
+           hall_revisar_nivel_estado_liquido_frenos-severo,
+           hall_inspeccionar_disco_rayaduras_alabeo-normal]).
+pdf(R) :- sintomas(S), hallazgos(H), append(S, H, E), diagnosticar(E, R).
+comp(R, Id, C) :- member(C, R.componentes), C.id == Id, !.
+eventos(R, Es) :- findall(E, ( member(T, R.traza), E = T.evento ), Es).
+
+test(traza_del_pdf_concluyente_en_3_de_5) :-
+    pdf(R), R.concluyente == true, R.motivo == sin_inciertos, R.iteraciones == 3.
+test(traza_del_pdf_probabilidades_y_estados) :-
+    pdf(R),
+    comp(R, liquido_frenos, L), L.estado == confirmado, cerca(L.probabilidad, 0.93, 0.02),
+    comp(R, pastillas_freno, P), P.estado == descartado, cerca(P.probabilidad, 0.039, 0.005),
+    comp(R, discos_freno, D), D.estado == descartado, cerca(D.probabilidad, 0.025, 0.005).
+test(traza_del_pdf_eventos_y_retrocesos) :-
+    pdf(R), eventos(R, Es),
+    Es == [apilar, prueba, rb1, prueba, rb3, prueba, rb1],
+    findall(F, ( member(T, R.traza), T.evento == prueba, F = T.foco ), Focos),
+    Focos == [pastillas_freno, liquido_frenos, discos_freno].
+test(traza_del_pdf_accion_88) :-
+    pdf(R), R.acciones = [A, B|_],
+    A.id == purgar_cambiar_liquido_frenos, cerca(A.relevancia, 0.88, 0.01),
+    B.id == revisar_fugas_circuito_frenos, cerca(B.relevancia, 0.47, 0.01).
+test(traza_del_pdf_explicacion_del_liquido) :-
+    pdf(R), member(Ex, R.explicacion), Ex.componente == liquido_frenos,
+    Ex.aportes = [A1, A2|_], A1.aporte >= A2.aporte,
+    memberchk(pedal_freno_esponjoso, [A1.sintoma, A2.sintoma]), !.
+test(traza_del_pdf_pruebas_hechas_y_nada_sugerido) :-
+    pdf(R), length(R.pruebas_hechas, 3), R.pruebas_sugeridas == [],
+    R.hallazgos_no_aplicados == [].
+test(estado_inicial_sin_resultados_de_pruebas) :-
+    sintomas(S), diagnosticar(S, R),
+    R.concluyente == false, R.motivo == prueba_pendiente, R.iteraciones == 0,
+    comp(R, pastillas_freno, P), cerca(P.probabilidad, 0.63, 0.02), P.estado == incierto,
+    R.pruebas_sugeridas = [S1|_], S1.prueba == medir_espesor_pastillas_freno,
+    S1.componente == pastillas_freno.
+test(se_detiene_en_la_prueba_pendiente) :-
+    sintomas(S), diagnosticar([hall_medir_espesor_pastillas_freno-normal|S], R),
+    R.iteraciones == 1, R.motivo == prueba_pendiente,
+    R.pruebas_sugeridas = [S1|_], S1.componente == liquido_frenos.
+test(hallazgo_no_pedido_se_informa) :-
+    sintomas(S), diagnosticar([hall_medir_voltaje_bateria-normal|S], R),
+    R.hallazgos_no_aplicados == [hall_medir_voltaje_bateria].
+test(max_iteraciones_es_no_concluyente_no_error) :-
+    modificada([parametro(max_iteraciones, 5)], [parametro(max_iteraciones, 2)], pdf(R)),
+    R.concluyente == false, R.motivo == max_iteraciones, R.iteraciones == 2.
+test(foco_sin_pruebas_pasa_al_siguiente_y_no_concluye) :-
+    modificada([prueba_componente(inspeccionar_disco_rayaduras_alabeo, discos_freno),
+                prueba_componente(medir_espesor_disco_freno, discos_freno)], [], pdf(R)),
+    R.concluyente == false, R.motivo == sin_pruebas.
+test(foco_sin_pruebas_queda_en_la_traza) :-
+    modificada([prueba_componente(inspeccionar_disco_rayaduras_alabeo, discos_freno),
+                prueba_componente(medir_espesor_disco_freno, discos_freno)], [],
+               ( pdf(R), eventos(R, Es) )),
+    memberchk(sin_pruebas, Es).
+test(contradiccion_detiene_el_ciclo) :-
+    diagnosticar([no_arranca-presente, ralenti_inestable-presente], R),
+    R.motivo == contradiccion, R.concluyente == false,
+    R.contradicciones = [P], P.a == no_arranca, P.b == ralenti_inestable.
+test(sin_sintomas_no_hay_hipotesis) :-
+    diagnosticar([], R), R.componentes == [], R.acciones == [].
+test(ejemplo_del_enunciado_circuito_de_arranque) :-
+    diagnosticar([no_arranca-presente, motor_no_gira-presente, faros_tenues-ausente,
+                  hall_medir_voltaje_bateria-normal], R),
+    comp(R, rele_arranque, Rele), Rele.estado == confirmado,
+    comp(R, circuito_control_arranque, Circ), Circ.estado == confirmado,
+    comp(R, solenoide_arranque, Sol), Sol.estado \== descartado,
+    \+ comp(R, pastillas_freno, _).
+test(cambiar_un_conteo_cambia_el_diagnostico) :-
+    pdf(R0), comp(R0, liquido_frenos, L0),
+    componente_sintoma(liquido_frenos, hall_revisar_nivel_estado_liquido_frenos, severo, N1, N2), !,
+    modificada([componente_sintoma(liquido_frenos, hall_revisar_nivel_estado_liquido_frenos, severo, N1, N2)],
+               [componente_sintoma(liquido_frenos, hall_revisar_nivel_estado_liquido_frenos, severo, 1, N2)],
+               ( pdf(R1), comp(R1, liquido_frenos, L1), L1.probabilidad < L0.probabilidad )).
+:- end_tests(ciclo).
