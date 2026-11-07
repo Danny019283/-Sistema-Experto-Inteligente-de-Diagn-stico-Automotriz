@@ -2,6 +2,7 @@
 :- use_module('../backend/servidor_json').
 :- use_module('../backend/validacion').
 :- use_module('../backend/inferencia').
+:- use_module('../backend/reglas').
 :- ensure_loaded('../backend/hechos').
 
 :- begin_tests(contrato_base).
@@ -477,3 +478,49 @@ test(acciones_ordenadas_de_mayor_a_menor) :-
     L = [R1-purgar_cambiar_liquido_frenos, R2-_|_], R1 >= R2,
     \+ ( member(R-_, L), R =< 0 ).
 :- end_tests(capas23).
+
+% ---------------------------------------------------------------------------
+% F02 reglas: validación de la entrada (RNF-01), R2b, clasificación y candidatos.
+% ---------------------------------------------------------------------------
+:- begin_tests(reglas_base).
+problema(Entrada, Texto) :-
+    validar_entrada(Entrada, Ps), member(P, Ps), sub_string(P, _, _, _, Texto), !.
+entrada([chirrido_frenos-presente, pedal_freno_esponjoso-presente]).
+
+test(entrada_valida) :-
+    validar_entrada([chirrido_frenos-presente, luz_abs_encendida-ausente,
+                     pedal_freno_pulsa-desconocido,
+                     hall_medir_espesor_pastillas_freno-normal], []).
+test(entrada_vacia_es_valida) :- validar_entrada([], []).
+test(sintoma_inexistente) :- problema([fantasma-presente], "síntoma inexistente").
+test(estado_invalido_en_sintoma) :- problema([chirrido_frenos-normal], "estado inválido").
+test(estado_invalido_en_hallazgo) :-
+    problema([hall_medir_espesor_pastillas_freno-presente], "estado inválido").
+test(sintoma_repetido) :-
+    problema([chirrido_frenos-presente, chirrido_frenos-ausente], "síntoma repetido").
+test(entrada_no_lista) :- validar_entrada(foo, [_]).
+test(elemento_mal_formado) :- problema([chirrido_frenos], "mal formada").
+test(hallazgo_de_prueba_inexistente) :-
+    modificada([], [sintoma(hall_fantasma, 'Resultado: fantasma', hallazgo)],
+               problema([hall_fantasma-normal], "prueba inexistente")).
+
+test(contradiccion_detectada) :-
+    contradicciones([no_arranca-presente, ralenti_inestable-presente], [no_arranca-ralenti_inestable]).
+test(sin_contradiccion_si_uno_ausente) :-
+    contradicciones([no_arranca-presente, ralenti_inestable-ausente], []).
+
+test(clasificar_estado_inicial) :-
+    entrada(X), clasificar(X, [P1-pastillas_freno-incierto, P2-liquido_frenos-incierto,
+                               P3-discos_freno-incierto|_]),
+    P1 > P2, P2 > P3.
+test(sin_evidencia_no_es_hipotesis) :-
+    clasificar([no_arranca-presente], L), \+ memberchk(_-pastillas_freno-_, L).
+test(candidatos_del_pdf) :-
+    entrada(X), candidatos(X, [pastillas_freno, liquido_frenos, discos_freno]).
+test(candidatos_excluyen_confirmados_y_descartados) :-
+    entrada(X0), X = [hall_medir_espesor_pastillas_freno-normal|X0],
+    candidatos(X, Cs), \+ memberchk(pastillas_freno, Cs).
+test(confirmados_con_probabilidad) :-
+    entrada(X0), X = [hall_revisar_nivel_estado_liquido_frenos-severo|X0],
+    confirmados(X, Conf), memberchk(liquido_frenos-P, Conf), P >= 0.85.
+:- end_tests(reglas_base).
