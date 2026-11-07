@@ -316,3 +316,53 @@ test(validar_en_cada_peticion_es_rapido) :-
     forall(between(1, 20, I), ( ping(I, R), estado(R, ok) )),
     statistics(cputime, T1), T1 - T0 < 5.
 :- end_tests(servidor_kb).
+
+% ---------------------------------------------------------------------------
+% PDF §6: con los conteos de la KB, Naive Bayes + Laplace reproduce la traza.
+% (Cálculo propio del test: el motor real llega en F02.)
+% ---------------------------------------------------------------------------
+:- begin_tests(pdf_seccion6).
+lr(C, S, E, LR) :-
+    componente(C, _, Np, Nn), componente_sintoma(C, S, E, P, N),
+    sintoma(S, _, T), ( T == sintoma -> V = 2 ; V = 3 ),
+    LR is ((P + 1) / (Np + V)) / ((N + 1) / (Nn + V)).
+% P(C | evidencia) en odds; un síntoma sin fila para C no aporta (queda el prior).
+prob(C, Evidencia, P) :-
+    componente(C, _, Np, Nn), Pr is (Np + 1) / (Np + Nn + 2),
+    foldl([S-E, O0, O]>>( lr(C, S, E, L) -> O is O0 * L ; O = O0 ),
+          Evidencia, Pr / (1 - Pr), Odds),
+    P is Odds / (1 + Odds).
+cerca(X, Y, Tol) :- abs(X - Y) =< Tol.
+
+entrada([chirrido_frenos-presente, pedal_freno_esponjoso-presente]).
+
+test(estado_inicial_63_44_31,
+     [forall(member(C-Esp, [pastillas_freno-0.63, liquido_frenos-0.44, discos_freno-0.31]))]) :-
+    entrada(X), prob(C, X, P), cerca(P, Esp, 0.02).
+test(lr_ruido_y_pedal,
+     [forall(member(C-S-Esp, [discos_freno-chirrido_frenos-1.97, pastillas_freno-chirrido_frenos-3.7,
+                              liquido_frenos-chirrido_frenos-0.8,
+                              discos_freno-pedal_freno_esponjoso-0.9, pastillas_freno-pedal_freno_esponjoso-0.7,
+                              liquido_frenos-pedal_freno_esponjoso-9.0]))]) :-
+    lr(C, S, presente, L), cerca(L, Esp, 0.06 * Esp + 0.02).
+test(el_orden_inicial_es_pastillas_liquido_discos) :-
+    entrada(X), prob(pastillas_freno, X, A), prob(liquido_frenos, X, B), prob(discos_freno, X, D),
+    A > B, B > D.
+test(iteracion_1_pastillas_refutada) :-
+    entrada(X),
+    prob(pastillas_freno, [hall_medir_espesor_pastillas_freno-normal|X], P),
+    cerca(P, 0.039, 0.005), P =< 0.05.
+test(iteracion_2_liquido_confirmado) :-
+    entrada(X),
+    prob(liquido_frenos, [hall_revisar_nivel_estado_liquido_frenos-severo|X], P),
+    cerca(P, 0.93, 0.02), P >= 0.85.
+test(iteracion_3_discos_descartado) :-
+    entrada(X),
+    prob(discos_freno, [hall_inspeccionar_disco_rayaduras_alabeo-normal|X], P),
+    cerca(P, 0.025, 0.005), P =< 0.05.
+test(acciones_del_resultado_final) :-
+    accion_componente(purgar_cambiar_liquido_frenos, liquido_frenos, M1),
+    accion_componente(revisar_fugas_circuito_frenos, liquido_frenos, M2),
+    cerca(1 - (1 - 0.93 * M1), 0.88, 0.01),
+    cerca(1 - (1 - 0.93 * M2), 0.47, 0.01), !.
+:- end_tests(pdf_seccion6).

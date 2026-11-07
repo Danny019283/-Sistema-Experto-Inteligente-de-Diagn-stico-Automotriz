@@ -42,7 +42,27 @@ Respuesta:
 - `estado`: `ok` | `sin_resultados` | `error`. `error` solo aparece con `estado: "error"`.
 - Códigos de error: `json_invalido` (mal formado o sin `id`/`op`; `id` sale `null`),
   `op_desconocida`, `args_invalidos` (`args` no es objeto), `excepcion_prolog`.
+  `kb_invalida` (la base de conocimiento no pasa `validar_kb`): toda operación conocida
+  responde así y añade `error.problemas`, la lista de problemas en texto. Los mensajes mal
+  formados, `op_desconocida` y `args_invalidos` conservan su propio código.
+```
+{"id": 1, "estado": "error", "resultados": [],
+ "error": {"codigo": "kb_invalida", "mensaje": "la base de conocimiento es inválida",
+           "problemas": ["accion_componente: accion inexistente fantasma"]}}
+```
 - Operaciones: `ping` → `[{"mensaje": "pong"}]`.
 
 El cliente C correlaciona la respuesta por `id` y trata swipl caído / timeout (5 s) /
 respuesta inválida como error de conexión, mostrado en la ventana con botón «Reintentar».
+
+## Base de conocimiento
+
+`backend/hechos.pl` (hechos Prolog; agregar un síntoma o componente no toca el código C) y
+`backend/validacion.pl`. `validar_kb/0` se ejecuta al cargar `hechos.pl` y `validar_kb/1`
+devuelve la lista de problemas: ids duplicados o inexistentes, relevancias/efectividades
+en [0, 1], conteos enteros ≥ 0, estados (`presente` o `normal|leve|severo`, que deben sumar
+N+ y N−), incompatibilidades y parámetros. La ventana muestra el código, el mensaje y los
+primeros problemas.
+
+`make test` corre las pruebas Prolog (`pruebas/pruebas_prolog.pl`) y las del controlador en C
+(`pruebas/pruebas_controlador.c`, incluido un servidor con la KB rota).
