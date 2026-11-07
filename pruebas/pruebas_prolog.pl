@@ -39,3 +39,33 @@ test(sin_pares_repetidos, [forall(incompatibilidad(A, B))]) :-
     \+ incompatibilidad(B, A),
     findall(x, incompatibilidad(A, B), [_]).
 :- end_tests(incompatibilidades).
+
+:- begin_tests(arranque).
+componente_arranque(rele_arranque).
+componente_arranque(solenoide_arranque).
+componente_arranque(circuito_control_arranque).
+
+test(existe, [forall(componente_arranque(C))]) :- componente(C, _, 40, 960).
+test(tiene_sintomas, [forall(componente_arranque(C))]) :-
+    componente_sintoma(C, S, presente, _, _), sintoma(S, _, sintoma), !.
+test(tiene_accion, [forall(componente_arranque(C))]) :-
+    accion_componente(A, C, _), accion(A, _), !.
+test(tiene_prueba_propia, [forall(componente_arranque(C))]) :-
+    prueba_componente(P, C), P \== medir_voltaje_bateria, prueba(P, _), !.
+test(voltaje_adecuado_los_distingue, [forall(componente_arranque(C))]) :-
+    prueba_componente(medir_voltaje_bateria, C),
+    componente_sintoma(C, hall_medir_voltaje_bateria, normal, NP, _),
+    componente_sintoma(bateria, hall_medir_voltaje_bateria, normal, BP, _),
+    NP > BP, !.
+
+% Reglas generales de los hallazgos (sirven de red de seguridad para toda la KB).
+test(estados_suman_conteos_del_componente,
+     [forall((componente(C, _, Np, Nn), sintoma(H, _, hallazgo),
+              componente_sintoma(C, H, _, _, _)))]) :-
+    aggregate_all(sum(P), componente_sintoma(C, H, _, P, _), Np),
+    aggregate_all(sum(N), componente_sintoma(C, H, _, _, N), Nn).
+test(fila_de_hallazgo_tiene_prueba_componente,
+     [forall((componente_sintoma(C, H, _, _, _), sintoma(H, _, hallazgo),
+              atom_concat(hall_, P, H)))]) :-
+    prueba_componente(P, C).
+:- end_tests(arranque).

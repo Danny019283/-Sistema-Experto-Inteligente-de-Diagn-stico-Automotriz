@@ -111,6 +111,9 @@ componente(foco_faro, 'Foco del faro', 40, 960).
 componente(tapa_distribuidor, 'Tapa del distribuidor', 40, 960).
 componente(cables_bujias, 'Juego de cables de bujías', 40, 960).
 componente(motor_arranque, 'Motor de arranque', 40, 960).
+componente(rele_arranque, 'Relé de arranque', 40, 960).
+componente(solenoide_arranque, 'Solenoide del motor de arranque', 40, 960).
+componente(circuito_control_arranque, 'Circuito de control del arranque (interruptor de encendido y cableado)', 40, 960).
 componente(bomba_limpiaparabrisas, 'Bomba del limpiaparabrisas', 40, 960).
 componente(motor_limpiaparabrisas, 'Motor del limpiaparabrisas', 40, 960).
 componente(valvula_purga_canister, 'Válvula de purga del canister', 40, 960).
@@ -213,6 +216,13 @@ componente_sintoma(cables_bujias, motor_fallos_encendido, presente, 24, 213).
 componente_sintoma(cables_bujias, mal_consumo_combustible, presente, 24, 142).
 componente_sintoma(motor_arranque, motor_no_gira, presente, 24, 48).
 componente_sintoma(motor_arranque, clic_al_arrancar, presente, 24, 72).
+componente_sintoma(rele_arranque, no_arranca, presente, 24, 48).
+componente_sintoma(rele_arranque, motor_no_gira, presente, 24, 48).
+componente_sintoma(rele_arranque, clic_al_arrancar, presente, 24, 72).
+componente_sintoma(solenoide_arranque, motor_no_gira, presente, 24, 48).
+componente_sintoma(solenoide_arranque, clic_al_arrancar, presente, 24, 72).
+componente_sintoma(circuito_control_arranque, no_arranca, presente, 24, 48).
+componente_sintoma(circuito_control_arranque, motor_no_gira, presente, 24, 48).
 componente_sintoma(bomba_limpiaparabrisas, sin_chorro_limpiaparabrisas, presente, 24, 72).
 componente_sintoma(motor_limpiaparabrisas, limpiaparabrisas_no_funciona, presente, 24, 48).
 componente_sintoma(valvula_purga_canister, luz_check_engine, presente, 24, 166).
@@ -521,6 +531,9 @@ accion_componente(reemplazar_foco_faro, foco_faro, 0.95).
 accion_componente(reemplazar_tapa_distribuidor, tapa_distribuidor, 0.95).
 accion_componente(reemplazar_cables_bujias, cables_bujias, 0.95).
 accion_componente(reemplazar_motor_arranque, motor_arranque, 0.95).
+accion_componente(reemplazar_motor_arranque, solenoide_arranque, 0.70).
+accion_componente(reemplazar_fusible_rele, rele_arranque, 0.80).
+accion_componente(reparar_cableado, circuito_control_arranque, 0.80).
 accion_componente(reemplazar_bomba_limpiaparabrisas, bomba_limpiaparabrisas, 0.95).
 accion_componente(reemplazar_motor_limpiaparabrisas, motor_limpiaparabrisas, 0.95).
 accion_componente(reemplazar_valvula_purga_canister, valvula_purga_canister, 0.95).
@@ -721,6 +734,8 @@ prueba(verificar_alimentacion_electrica_motor_vidrio, 'Verificar la alimentació
 prueba(verificar_alimentacion_electrica_motor, 'Verificar la alimentación eléctrica del motor del limpiaparabrisas').
 prueba(probar_funcionamiento_ventilador_radiador, 'Probar el funcionamiento del ventilador del radiador').
 prueba(probar_solenoide_motor_arranque, 'Probar el solenoide del motor de arranque').
+prueba(probar_rele_arranque, 'Probar el relé de arranque').
+prueba(probar_circuito_control_arranque, 'Verificar la continuidad del circuito de control del arranque').
 prueba(probar_funcionamiento_termostato, 'Probar el funcionamiento del termostato').
 prueba(probar_sensor_posicion_acelerador_tps, 'Probar el sensor de posición del acelerador (TPS)').
 prueba(probar_funcionamiento_bomba_agua, 'Probar el funcionamiento de la bomba de agua').
@@ -873,6 +888,9 @@ prueba_componente(medir_voltaje_sensor_map, sensor_map).
 prueba_componente(medir_salida_alternador, sistema_carga).
 prueba_componente(medir_voltaje_bateria, bateria).
 prueba_componente(medir_voltaje_bateria, sistema_carga).
+prueba_componente(medir_voltaje_bateria, rele_arranque).
+prueba_componente(medir_voltaje_bateria, solenoide_arranque).
+prueba_componente(medir_voltaje_bateria, circuito_control_arranque).
 prueba_componente(medir_presion_vacio_servofreno, servofreno).
 prueba_componente(probar_funcionamiento_valvula_purga, canister_carbon).
 prueba_componente(probar_funcionamiento_valvula_purga, valvula_purga_canister).
@@ -891,6 +909,9 @@ prueba_componente(verificar_alimentacion_electrica_motor_vidrio, motor_vidrio_pu
 prueba_componente(verificar_alimentacion_electrica_motor, motor_limpiaparabrisas).
 prueba_componente(probar_funcionamiento_ventilador_radiador, ventilador_radiador).
 prueba_componente(probar_solenoide_motor_arranque, motor_arranque).
+prueba_componente(probar_solenoide_motor_arranque, solenoide_arranque).
+prueba_componente(probar_rele_arranque, rele_arranque).
+prueba_componente(probar_circuito_control_arranque, circuito_control_arranque).
 prueba_componente(probar_funcionamiento_termostato, termostato).
 prueba_componente(probar_sensor_posicion_acelerador_tps, cuerpo_aceleracion).
 prueba_componente(probar_sensor_posicion_acelerador_tps, sensor_tps).
@@ -1126,6 +1147,10 @@ prueba_sintoma(verificar_alimentacion_electrica_motor, limpiaparabrisas_no_funci
 prueba_sintoma(probar_funcionamiento_ventilador_radiador, motor_sobrecalienta, 0.70).
 prueba_sintoma(probar_solenoide_motor_arranque, clic_al_arrancar, 0.70).
 prueba_sintoma(probar_solenoide_motor_arranque, motor_no_gira, 0.70).
+prueba_sintoma(probar_rele_arranque, motor_no_gira, 0.70).
+prueba_sintoma(probar_rele_arranque, clic_al_arrancar, 0.50).
+prueba_sintoma(probar_circuito_control_arranque, no_arranca, 0.70).
+prueba_sintoma(probar_circuito_control_arranque, motor_no_gira, 0.50).
 prueba_sintoma(probar_funcionamiento_termostato, motor_sobrecalienta, 0.50).
 prueba_sintoma(probar_funcionamiento_termostato, temperatura_zona_roja, 0.50).
 prueba_sintoma(probar_sensor_posicion_acelerador_tps, mala_aceleracion, 0.50).
@@ -1284,6 +1309,8 @@ sintoma(hall_verificar_alimentacion_electrica_motor_vidrio, 'Resultado: Verifica
 sintoma(hall_verificar_alimentacion_electrica_motor, 'Resultado: Verificar la alimentación eléctrica del motor del limpiaparabrisas', hallazgo).
 sintoma(hall_probar_funcionamiento_ventilador_radiador, 'Resultado: Probar el funcionamiento del ventilador del radiador', hallazgo).
 sintoma(hall_probar_solenoide_motor_arranque, 'Resultado: Probar el solenoide del motor de arranque', hallazgo).
+sintoma(hall_probar_rele_arranque, 'Resultado: Probar el relé de arranque', hallazgo).
+sintoma(hall_probar_circuito_control_arranque, 'Resultado: Verificar la continuidad del circuito de control del arranque', hallazgo).
 sintoma(hall_probar_funcionamiento_termostato, 'Resultado: Probar el funcionamiento del termostato', hallazgo).
 sintoma(hall_probar_sensor_posicion_acelerador_tps, 'Resultado: Probar el sensor de posición del acelerador (TPS)', hallazgo).
 sintoma(hall_probar_funcionamiento_bomba_agua, 'Resultado: Probar el funcionamiento de la bomba de agua', hallazgo).
@@ -1732,6 +1759,15 @@ componente_sintoma(bateria, hall_medir_voltaje_bateria, severo, 29, 95).
 componente_sintoma(sistema_carga, hall_medir_voltaje_bateria, normal, 3, 722).
 componente_sintoma(sistema_carga, hall_medir_voltaje_bateria, leve, 8, 143).
 componente_sintoma(sistema_carga, hall_medir_voltaje_bateria, severo, 29, 95).
+componente_sintoma(rele_arranque, hall_medir_voltaje_bateria, normal, 36, 722).
+componente_sintoma(rele_arranque, hall_medir_voltaje_bateria, leve, 3, 143).
+componente_sintoma(rele_arranque, hall_medir_voltaje_bateria, severo, 1, 95).
+componente_sintoma(solenoide_arranque, hall_medir_voltaje_bateria, normal, 36, 722).
+componente_sintoma(solenoide_arranque, hall_medir_voltaje_bateria, leve, 3, 143).
+componente_sintoma(solenoide_arranque, hall_medir_voltaje_bateria, severo, 1, 95).
+componente_sintoma(circuito_control_arranque, hall_medir_voltaje_bateria, normal, 36, 722).
+componente_sintoma(circuito_control_arranque, hall_medir_voltaje_bateria, leve, 3, 143).
+componente_sintoma(circuito_control_arranque, hall_medir_voltaje_bateria, severo, 1, 95).
 componente_sintoma(servofreno, hall_medir_presion_vacio_servofreno, normal, 1, 818).
 componente_sintoma(servofreno, hall_medir_presion_vacio_servofreno, leve, 3, 95).
 componente_sintoma(servofreno, hall_medir_presion_vacio_servofreno, severo, 36, 47).
@@ -1786,6 +1822,15 @@ componente_sintoma(ventilador_radiador, hall_probar_funcionamiento_ventilador_ra
 componente_sintoma(motor_arranque, hall_probar_solenoide_motor_arranque, normal, 1, 818).
 componente_sintoma(motor_arranque, hall_probar_solenoide_motor_arranque, leve, 3, 95).
 componente_sintoma(motor_arranque, hall_probar_solenoide_motor_arranque, severo, 36, 47).
+componente_sintoma(solenoide_arranque, hall_probar_solenoide_motor_arranque, normal, 1, 818).
+componente_sintoma(solenoide_arranque, hall_probar_solenoide_motor_arranque, leve, 3, 95).
+componente_sintoma(solenoide_arranque, hall_probar_solenoide_motor_arranque, severo, 36, 47).
+componente_sintoma(rele_arranque, hall_probar_rele_arranque, normal, 1, 818).
+componente_sintoma(rele_arranque, hall_probar_rele_arranque, leve, 3, 95).
+componente_sintoma(rele_arranque, hall_probar_rele_arranque, severo, 36, 47).
+componente_sintoma(circuito_control_arranque, hall_probar_circuito_control_arranque, normal, 1, 818).
+componente_sintoma(circuito_control_arranque, hall_probar_circuito_control_arranque, leve, 3, 95).
+componente_sintoma(circuito_control_arranque, hall_probar_circuito_control_arranque, severo, 36, 47).
 componente_sintoma(termostato, hall_probar_funcionamiento_termostato, normal, 1, 818).
 componente_sintoma(termostato, hall_probar_funcionamiento_termostato, leve, 3, 95).
 componente_sintoma(termostato, hall_probar_funcionamiento_termostato, severo, 36, 47).
