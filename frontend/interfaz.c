@@ -71,8 +71,14 @@ int interfaz_ejecutar(Controlador *k) {
                 controlador_cerrar(k);
                 controlador_probar_conexion(k);
             }
-            nk_layout_row_dynamic(ctx, 120, 1);
-            nk_label_wrap(ctx, k->mensaje);
+            /* Una fila por línea del mensaje (nk_label_wrap ignora los '\n'). */
+            nk_layout_row_dynamic(ctx, 48, 1);
+            for (const char *p = k->mensaje; *p;) {
+                const char *nl = strchr(p, '\n');
+                int len = nl ? (int)(nl - p) : (int)strlen(p);
+                nk_text_wrap(ctx, p, len);
+                p += len + (nl ? 1 : 0);
+            }
         }
         nk_end(ctx);
 

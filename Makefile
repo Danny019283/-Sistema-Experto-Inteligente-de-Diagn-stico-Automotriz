@@ -7,6 +7,8 @@ CFLAGS  := -std=gnu11 -O2 -Wall -Wextra -Ifrontend -Ifrontend/vendor -Iintegraci
            -Iintegracion/vendor -DFUENTE_TTF='"$(FUENTE)"' $(shell pkg-config --cflags sdl2 2>/dev/null)
 LDLIBS  := $(shell pkg-config --libs sdl2 2>/dev/null) -lm
 
+TEST_C  := pruebas/pruebas_controlador
+
 .PHONY: build run test clean deps
 
 build: deps $(BIN)
@@ -23,9 +25,12 @@ run: build
 test:
 	@command -v swipl >/dev/null || { echo "Falta swipl (SWI-Prolog)."; exit 1; }
 	swipl -q -g run_tests -t halt pruebas/pruebas_prolog.pl
+	$(CC) -std=gnu11 -Wall -Wextra -w -Ifrontend -Iintegracion -Iintegracion/vendor -o $(TEST_C) \
+	    $(TEST_C).c frontend/controlador.c integracion/conexion.c integracion/vendor/cJSON.c -lm
+	./$(TEST_C) backend/servidor_json.pl pruebas/servidor_kb_rota.pl 2>/dev/null
 
 clean:
-	rm -f $(BIN) $(OBJ)
+	rm -f $(BIN) $(OBJ) $(TEST_C)
 
 deps:
 	@command -v gcc >/dev/null || { echo "Falta gcc."; exit 1; }
