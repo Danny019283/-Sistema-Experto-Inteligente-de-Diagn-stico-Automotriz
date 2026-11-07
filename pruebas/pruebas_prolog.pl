@@ -606,3 +606,59 @@ test(cambiar_un_conteo_cambia_el_diagnostico) :-
                [componente_sintoma(liquido_frenos, hall_revisar_nivel_estado_liquido_frenos, severo, 1, N2)],
                ( pdf(R1), comp(R1, liquido_frenos, L1), L1.probabilidad < L0.probabilidad )).
 :- end_tests(ciclo).
+
+% ---------------------------------------------------------------------------
+% F02 operación JSON `diagnosticar` (RNF-01 validaciones, RNF-02 errores).
+% ---------------------------------------------------------------------------
+:- begin_tests(op_diagnosticar).
+diag(Args, R) :-
+    format(string(L), "{\"id\":7,\"op\":\"diagnosticar\",\"args\":~s}", [Args]),
+    procesar_linea(L, R).
+pdf_args("{\"sintomas\":{\"chirrido_frenos\":\"presente\",\"pedal_freno_esponjoso\":\"presente\"},
+  \"hallazgos\":{\"hall_medir_espesor_pastillas_freno\":\"normal\",
+                 \"hall_revisar_nivel_estado_liquido_frenos\":\"severo\",
+                 \"hall_inspeccionar_disco_rayaduras_alabeo\":\"normal\"}}").
+problema(R, Texto) :- member(P, R.error.problemas), sub_string(P, _, _, _, Texto), !.
+
+test(traza_del_pdf_por_json) :-
+    pdf_args(A), diag(A, R), R.id == 7, R.estado == ok, R.resultados = [D],
+    D.concluyente == true, D.iteraciones == 3.
+test(sin_hallazgos_es_no_concluyente_ok) :-
+    diag("{\"sintomas\":{\"chirrido_frenos\":\"presente\"}}", R),
+    R.estado == ok, R.resultados = [D], D.concluyente == false.
+test(sin_sintomas_es_sin_resultados) :-
+    diag("{}", R), R.estado == sin_resultados, R.resultados == [].
+test(solo_hallazgos_es_sin_resultados) :-
+    diag("{\"hallazgos\":{\"hall_medir_voltaje_bateria\":\"normal\"}}", R),
+    R.estado == sin_resultados.
+test(sintoma_inexistente) :-
+    diag("{\"sintomas\":{\"fantasma\":\"presente\"}}", R),
+    R.estado == error, R.error.codigo == entrada_invalida, problema(R, "síntoma inexistente").
+test(estado_invalido) :-
+    diag("{\"sintomas\":{\"chirrido_frenos\":\"quizas\"}}", R),
+    R.error.codigo == entrada_invalida, problema(R, "estado inválido").
+test(estado_no_cadena) :-
+    diag("{\"sintomas\":{\"chirrido_frenos\":1}}", R),
+    R.error.codigo == entrada_invalida.
+test(hallazgo_en_sintomas_es_invalido) :-
+    diag("{\"sintomas\":{\"hall_medir_voltaje_bateria\":\"presente\"}}", R),
+    R.error.codigo == entrada_invalida.
+test(sintomas_no_es_objeto) :-
+    diag("{\"sintomas\":[\"chirrido_frenos\"]}", R),
+    R.error.codigo == entrada_invalida, problema(R, "objeto JSON").
+test(varios_problemas_a_la_vez) :-
+    diag("{\"sintomas\":{\"x\":\"presente\",\"y\":\"presente\"}}", R),
+    length(R.error.problemas, 2).
+test(contradiccion_por_json) :-
+    diag("{\"sintomas\":{\"no_arranca\":\"presente\",\"ralenti_inestable\":\"presente\"}}", R),
+    R.estado == ok, R.resultados = [D], D.motivo == contradiccion.
+test(respuesta_serializable_a_json) :-
+    pdf_args(A), diag(A, R),
+    with_output_to(string(S), json_write_dict(current_output, R, [width(0)])),
+    sub_string(S, _, _, _, "\"concluyente\":true"),
+    atom_json_dict(S, _, []), !.
+test(con_la_kb_rota_responde_kb_invalida) :-
+    modificada([], [accion_componente(fantasma, liquido_frenos, 0.5)],
+               ( pdf_args(A), diag(A, R) )),
+    R.error.codigo == kb_invalida.
+:- end_tests(op_diagnosticar).

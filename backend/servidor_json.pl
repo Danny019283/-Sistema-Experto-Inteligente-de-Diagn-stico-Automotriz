@@ -6,6 +6,7 @@
 :- module(servidor_json, [main/0, procesar_linea/2]).
 :- use_module(library(http/json)).
 :- use_module(validacion).
+:- use_module(reglas).
 % La KB son hechos de `user`: se carga ahí, no dentro de este módulo.
 :- user:consult(hechos).
 
@@ -45,6 +46,7 @@ procesar_linea(Linea, Resp) :-
     ).
 
 operacion_conocida(ping).
+operacion_conocida(diagnosticar).
 
 % RNF-02: con la KB inválida toda operación conocida responde kb_invalida (se valida
 % en cada petición: la KB es chica y así también se detectan cambios en caliente).
@@ -59,6 +61,10 @@ despachar(Id, Op, Args, Resp) :-
         (   var(E)
         ->  estado_resultados(Res, Estado),
             Resp = _{id: Id, estado: Estado, resultados: Res}
+        ;   E = entrada_invalida(Ps)
+        ->  Resp = _{id: Id, estado: error, resultados: [],
+                     error: _{codigo: entrada_invalida,
+                              mensaje: "la entrada no es válida", problemas: Ps}}
         ;   message_to_string(E, M),
             error(Id, excepcion_prolog, M, Resp)
         )
@@ -68,6 +74,26 @@ estado_resultados([], sin_resultados) :- !.
 estado_resultados(_, ok).
 
 ejecutar(ping, _, [_{mensaje: "pong"}]).
+% diagnosticar: args {"sintomas": {"<id>": "presente|ausente|desconocido", ...},
+%                     "hallazgos": {"hall_<prueba>": "normal|leve|severo", ...}}   (hallazgos opcional)
+% Sin síntomas -> sin_resultados; entrada inválida -> error entrada_invalida con "problemas".
+ejecutar(diagnosticar, Args, Res) :-
+    entrada_args(Args, Entrada),
+    validar_entrada(Entrada, Problemas),
+    (   Problemas \== [] -> throw(entrada_invalida(Problemas))
+    ;   \+ ( member(S-_, Entrada), sintoma(S, _, sintoma) ) -> Res = []
+    ;   diagnosticar(Entrada, R), Res = [R]
+    ).
+
+% Pares Sintoma-Estado desde dos objetos JSON; lo mal formado queda como término que
+% validar_entrada rechaza (objeto con valores no-cadena, o args que no son objetos).
+entrada_args(Args, Entrada) :-
+    forall(( member(Clave, [sintomas, hallazgos]), get_dict(Clave, Args, D), \+ is_dict(D) ),
+           ( format(string(M), "~w debe ser un objeto JSON", [Clave]),
+             throw(entrada_invalida([M])) )),
+    findall(S-E, ( member(Clave, [sintomas, hallazgos]), get_dict(Clave, Args, D), is_dict(D),
+                   get_dict(K, D, V), atom_string(S, K), valor_atomo(V, E) ), Entrada).
+valor_atomo(V, E) :- ( string(V) -> atom_string(E, V) ; E = V ).
 
 error(Id, Codigo, Mensaje, _{id: Id, estado: error, resultados: [],
                              error: _{codigo: Codigo, mensaje: Mensaje}}).
