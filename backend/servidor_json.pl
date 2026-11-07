@@ -88,7 +88,7 @@ ejecutar(diagnosticar, Args, Res) :-
     ;   diagnosticar(Entrada, R), Res = [R]
     ).
 
-% registrar_vehiculo: args {marca, modelo, anio, motor, combustible, kilometraje}; reemplaza el
+% registrar_vehiculo: args {marca, modelo, anio, cilindrada, combustible, kilometraje}; reemplaza el
 % registro anterior y devuelve el vehículo. Campos inválidos -> error entrada_invalida.
 ejecutar(registrar_vehiculo, Args, [V]) :- registrar_vehiculo(Args, V).
 % consultar_vehiculo: el vehículo registrado, o sin_resultados si no hay.

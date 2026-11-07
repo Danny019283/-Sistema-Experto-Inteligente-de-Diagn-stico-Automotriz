@@ -123,7 +123,7 @@ static void test_validaciones(void) {
 static FormVehiculo form_valido(void) {
     FormVehiculo f;
     vehiculo_form_iniciar(&f);
-    strcpy(f.marca, "Toyota"); strcpy(f.modelo, "Corolla"); strcpy(f.motor, "1.8 L");
+    strcpy(f.marca, "Toyota"); strcpy(f.modelo, "Corolla"); strcpy(f.cilindrada, "1.8 L");
     strcpy(f.anio, "2015"); strcpy(f.km, "120000"); f.combustible = 0;
     return f;
 }
@@ -163,8 +163,8 @@ static void test_vehiculo_validar(void) {
     f.combustible = -1; CHECK(vehiculo_validar(&f, err) == 1 && err[VF_COMBUSTIBLE][0]);
     f.combustible = 0;
     f.marca[0] = 0; CHECK(vehiculo_validar(&f, err) == 1 && err[VF_MARCA][0] && !err[VF_MODELO][0]);
-    strcpy(f.marca, "Ford"); strcpy(f.modelo, "  "); strcpy(f.motor, "x\x01");
-    CHECK(vehiculo_validar(&f, err) == 2 && err[VF_MODELO][0] && err[VF_MOTOR][0]); /* uno por campo, todos a la vez */
+    strcpy(f.marca, "Ford"); strcpy(f.modelo, "  "); strcpy(f.cilindrada, "x\x01");
+    CHECK(vehiculo_validar(&f, err) == 2 && err[VF_MODELO][0] && err[VF_CILINDRADA][0]); /* uno por campo, todos a la vez */
     FormVehiculo v; vehiculo_form_iniciar(&v);
     CHECK(vehiculo_validar(&v, err) == VF_N);
 }
@@ -186,10 +186,10 @@ static void test_vehiculo_json(void) {
     cJSON_Delete(mal);
     /* los problemas de Prolog se reparten por campo; los desconocidos se ignoran */
     cJSON *e = cJSON_Parse("{\"estado\":\"error\",\"error\":{\"codigo\":\"entrada_invalida\",\"problemas\":"
-        "[\"anio: debe estar entre 1950 y 2027\",\"motor: no puede estar vac\xc3\xado\",\"otro: x\"]}}");
+        "[\"anio: debe estar entre 1950 y 2027\",\"cilindrada: no puede estar vac\xc3\xado\",\"otro: x\"]}}");
     char err[VF_N][VF_ERR];
     CHECK(vehiculo_errores_prolog(e, err) == 2);
-    CHECK(strstr(err[VF_ANIO], "1950") && strstr(err[VF_MOTOR], "motor") && !err[VF_MARCA][0]);
+    CHECK(strstr(err[VF_ANIO], "1950") && strstr(err[VF_CILINDRADA], "cilindrada") && !err[VF_MARCA][0]);
     cJSON_Delete(e);
 }
 

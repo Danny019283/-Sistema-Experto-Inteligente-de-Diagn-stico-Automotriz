@@ -5,7 +5,7 @@
 
 /* Formulario del vehículo (F04): estado de edición, validación (RNF-01) y JSON.
  * Los límites coinciden con backend/vehiculo.pl (Prolog vuelve a validar). */
-enum { VF_MARCA, VF_MODELO, VF_ANIO, VF_MOTOR, VF_COMBUSTIBLE, VF_KM, VF_N };
+enum { VF_MARCA, VF_MODELO, VF_ANIO, VF_CILINDRADA, VF_COMBUSTIBLE, VF_KM, VF_N };
 #define VF_TEXTO 128        /* buffer de los textos libres (UTF-8) */
 #define VF_ERR 128          /* mensaje de error por campo */
 #define VF_MAX_CARS 40
@@ -18,7 +18,7 @@ extern const char *const VF_COMBUSTIBLE_ETIQUETA[VF_N_COMBUSTIBLES];  /* texto p
 extern const char *const VF_CAMPO[VF_N];                              /* nombre del campo en el JSON */
 
 typedef struct {
-    char marca[VF_TEXTO], modelo[VF_TEXTO], motor[VF_TEXTO];
+    char marca[VF_TEXTO], modelo[VF_TEXTO], cilindrada[VF_TEXTO];
     char anio[16], km[16];
     int combustible;  /* índice en VF_COMBUSTIBLE_*; -1 = sin elegir */
 } FormVehiculo;

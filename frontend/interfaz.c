@@ -62,7 +62,7 @@ static void pantalla_vehiculo(struct nk_context *ctx, Controlador *k, Menu *m) {
     campo_texto(ctx, "Marca", f->marca, sizeof f->marca, k->errores[VF_MARCA]);
     campo_texto(ctx, "Modelo", f->modelo, sizeof f->modelo, k->errores[VF_MODELO]);
     campo_texto(ctx, "Año", f->anio, sizeof f->anio, k->errores[VF_ANIO]);
-    campo_texto(ctx, "Tipo de motor", f->motor, sizeof f->motor, k->errores[VF_MOTOR]);
+    campo_texto(ctx, "Cilindrada", f->cilindrada, sizeof f->cilindrada, k->errores[VF_CILINDRADA]);
     nk_layout_row_dynamic(ctx, 32, 2);
     nk_label(ctx, "Combustible", NK_TEXT_LEFT);
     if (nk_combo_begin_label(ctx, f->combustible >= 0 ? VF_COMBUSTIBLE_ETIQUETA[f->combustible] : "Elige...",

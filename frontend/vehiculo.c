@@ -10,7 +10,7 @@ const char *const VF_COMBUSTIBLE_ID[VF_N_COMBUSTIBLES] =
 const char *const VF_COMBUSTIBLE_ETIQUETA[VF_N_COMBUSTIBLES] =
     { "Gasolina", "Diésel", "Híbrido", "Eléctrico", "Gas (GLP/GNV)" };
 const char *const VF_CAMPO[VF_N] =
-    { "marca", "modelo", "anio", "motor", "combustible", "kilometraje" };
+    { "marca", "modelo", "anio", "cilindrada", "combustible", "kilometraje" };
 
 void vehiculo_form_iniciar(FormVehiculo *f) {
     memset(f, 0, sizeof *f);
@@ -32,7 +32,7 @@ int vehiculo_validar(const FormVehiculo *f, char err[VF_N][VF_ERR]) {
     memset(err, 0, (size_t)VF_N * VF_ERR);
     texto(f->marca, "La marca", err[VF_MARCA]);
     texto(f->modelo, "El modelo", err[VF_MODELO]);
-    texto(f->motor, "El tipo de motor", err[VF_MOTOR]);
+    texto(f->cilindrada, "La cilindrada", err[VF_CILINDRADA]);
     if (!validar_entero(f->anio, VF_ANIO_MIN, anio_maximo(), NULL))
         snprintf(err[VF_ANIO], VF_ERR, "El año debe ser un entero entre %d y %d", VF_ANIO_MIN, anio_maximo());
     if (f->combustible < 0 || f->combustible >= VF_N_COMBUSTIBLES)
@@ -52,7 +52,7 @@ cJSON *vehiculo_a_json(const FormVehiculo *f) {
     cJSON_AddStringToObject(o, "marca", f->marca);
     cJSON_AddStringToObject(o, "modelo", f->modelo);
     cJSON_AddNumberToObject(o, "anio", (double)anio);
-    cJSON_AddStringToObject(o, "motor", f->motor);
+    cJSON_AddStringToObject(o, "cilindrada", f->cilindrada);
     cJSON_AddStringToObject(o, "combustible",
         f->combustible >= 0 && f->combustible < VF_N_COMBUSTIBLES ? VF_COMBUSTIBLE_ID[f->combustible] : "");
     cJSON_AddNumberToObject(o, "kilometraje", (double)km);
@@ -79,14 +79,14 @@ int vehiculo_errores_prolog(const cJSON *resp, char err[VF_N][VF_ERR]) {
 
 int vehiculo_desde_json(FormVehiculo *f, const cJSON *v) {
     const cJSON *ma = cJSON_GetObjectItem(v, "marca"), *mo = cJSON_GetObjectItem(v, "modelo"),
-                *mt = cJSON_GetObjectItem(v, "motor"), *an = cJSON_GetObjectItem(v, "anio"),
+                *mt = cJSON_GetObjectItem(v, "cilindrada"), *an = cJSON_GetObjectItem(v, "anio"),
                 *km = cJSON_GetObjectItem(v, "kilometraje"), *co = cJSON_GetObjectItem(v, "combustible");
     if (!cJSON_IsString(ma) || !cJSON_IsString(mo) || !cJSON_IsString(mt) || !cJSON_IsNumber(an)
         || !cJSON_IsNumber(km) || !cJSON_IsString(co)) return 0;
     vehiculo_form_iniciar(f);
     snprintf(f->marca, sizeof f->marca, "%s", ma->valuestring);
     snprintf(f->modelo, sizeof f->modelo, "%s", mo->valuestring);
-    snprintf(f->motor, sizeof f->motor, "%s", mt->valuestring);
+    snprintf(f->cilindrada, sizeof f->cilindrada, "%s", mt->valuestring);
     snprintf(f->anio, sizeof f->anio, "%ld", (long)an->valuedouble);
     snprintf(f->km, sizeof f->km, "%ld", (long)km->valuedouble);
     for (int i = 0; i < VF_N_COMBUSTIBLES; i++)
@@ -95,7 +95,7 @@ int vehiculo_desde_json(FormVehiculo *f, const cJSON *v) {
 }
 
 void vehiculo_resumen(const FormVehiculo *f, char *out, size_t n) {
-    snprintf(out, n, "%s %s %s · %s · %s · %s km", f->marca, f->modelo, f->anio, f->motor,
+    snprintf(out, n, "%s %s %s · %s · %s · %s km", f->marca, f->modelo, f->anio, f->cilindrada,
              f->combustible >= 0 && f->combustible < VF_N_COMBUSTIBLES
                  ? VF_COMBUSTIBLE_ETIQUETA[f->combustible] : "?", f->km);
 }

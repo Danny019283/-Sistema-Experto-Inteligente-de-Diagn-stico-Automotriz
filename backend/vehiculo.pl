@@ -1,5 +1,5 @@
 % Vehículo de la sesión (F04): hecho dinámico vehiculo/6, un único registro.
-%   vehiculo(Marca, Modelo, Anio, Motor, Combustible, Km)
+%   vehiculo(Marca, Modelo, Anio, Cilindrada, Combustible, Km)
 % registrar_vehiculo(+Args, -V): valida (RNF-01), reemplaza el registro anterior y devuelve el
 % vehículo como diccionario; si hay campos inválidos lanza entrada_invalida(Problemas), con un
 % texto "campo: motivo" por problema.
@@ -14,7 +14,7 @@ km_maximo(3000000).
 
 consultar_vehiculo(V) :-
     vehiculo(Ma, Mo, A, Mt, Co, Km),
-    V = _{marca: Ma, modelo: Mo, anio: A, motor: Mt, combustible: Co, kilometraje: Km}.
+    V = _{marca: Ma, modelo: Mo, anio: A, cilindrada: Mt, combustible: Co, kilometraje: Km}.
 
 registrar_vehiculo(Args, V) :-
     campos(Args, Ma, Mo, A, Mt, Co, Km, Ps),
@@ -28,7 +28,7 @@ registrar_vehiculo(Args, V) :-
 % Un problema por campo como máximo; los textos válidos quedan recortados.
 campos(Args, Ma, Mo, A, Mt, Co, Km, Ps) :-
     texto(Args, marca, Ma, P1), texto(Args, modelo, Mo, P2),
-    entero(Args, anio, A, P3), texto(Args, motor, Mt, P4),
+    entero(Args, anio, A, P3), texto(Args, cilindrada, Mt, P4),
     combustible(Args, Co, P5), entero(Args, kilometraje, Km, P6),
     exclude(==(ok), [P1, P2, P3, P4, P5, P6], Ps).
 

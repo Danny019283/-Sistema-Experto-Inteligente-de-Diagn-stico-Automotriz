@@ -77,11 +77,11 @@ su hallazgo. Solo se investigan los inciertos con evidencia y P ≥ `tau_candida
 
 ```
 {"id": 3, "op": "registrar_vehiculo", "args": {"marca": "Toyota", "modelo": "Corolla",
-  "anio": 2015, "motor": "1.8 L 4 cil", "combustible": "gasolina", "kilometraje": 120000}}
+  "anio": 2015, "cilindrada": "1.8 L", "combustible": "gasolina", "kilometraje": 120000}}
 ```
 Guarda `vehiculo/6` (hecho dinámico, un solo registro: registrar de nuevo reemplaza el anterior) y
 devuelve el vehículo en `resultados[0]`. `consultar_vehiculo` (sin args) devuelve el registrado o
-`sin_resultados`. Validación (RNF-01): `marca`, `modelo`, `motor` texto no vacío de ≤ 40 caracteres
+`sin_resultados`. Validación (RNF-01): `marca`, `modelo`, `cilindrada` (p. ej. "1.8 L") texto no vacío de ≤ 40 caracteres
 sin caracteres de control (se recortan los espacios de los extremos); `anio` entero entre 1950 y
 el año actual + 1; `kilometraje` entero entre 0 y 3 000 000; `combustible`: `gasolina | diesel |
 hibrido | electrico | gas`. Si algo falla: `entrada_invalida` con un `"campo: motivo"` por campo

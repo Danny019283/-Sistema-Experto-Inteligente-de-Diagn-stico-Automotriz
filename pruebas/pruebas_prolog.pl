@@ -751,7 +751,7 @@ usa_op(Op) :-
 % F04 (issue #56): vehículo de la sesión (vehiculo/6) y operaciones JSON.
 :- begin_tests(vehiculo).
 :- use_module('../backend/vehiculo').
-ok_json("{\"marca\":\"Toyota\",\"modelo\":\"Corolla\",\"anio\":2015,\"motor\":\"1.8 L 4 cil\",\"combustible\":\"gasolina\",\"kilometraje\":120000}").
+ok_json("{\"marca\":\"Toyota\",\"modelo\":\"Corolla\",\"anio\":2015,\"cilindrada\":\"1.8 L\",\"combustible\":\"gasolina\",\"kilometraje\":120000}").
 peticion(Op, Args, R) :-
     format(string(L), "{\"id\":7,\"op\":\"~w\",\"args\":~s}", [Op, Args]), procesar_linea(L, R).
 limpio :- retractall(vehiculo:vehiculo(_, _, _, _, _, _)).
@@ -769,7 +769,7 @@ test(consultar_sin_registro, [setup(limpio)]) :-
 test(registrar_y_consultar, [setup(limpio)]) :-
     ok_json(J), peticion(registrar_vehiculo, J, R),
     R.estado == ok, [V] = R.resultados, V.marca == "Toyota", V.anio == 2015, V.combustible == gasolina,
-    vehiculo:vehiculo("Toyota", "Corolla", 2015, "1.8 L 4 cil", gasolina, 120000),
+    vehiculo:vehiculo("Toyota", "Corolla", 2015, "1.8 L", gasolina, 120000),
     peticion(consultar_vehiculo, "{}", R2), [V2] = R2.resultados, V2.kilometraje == 120000.
 test(editar_reemplaza_el_anterior, [setup(limpio)]) :-
     ok_json(J), peticion(registrar_vehiculo, J, _),
@@ -787,8 +787,8 @@ test(anio_no_entero, [forall(member(A, ["2015", 2015.5, null]))]) :- invalido(an
 test(km_negativo) :- invalido(kilometraje, -1).
 test(km_no_entero, [forall(member(K, ["abc", 1.5]))]) :- invalido(kilometraje, K).
 test(km_cero_valido, [setup(limpio)]) :- con_campo(kilometraje, 0, R), R.estado == ok.
-test(texto_vacio, [forall(member(C, [marca, modelo, motor]))]) :- invalido(C, "   ").
-test(texto_largo, [forall(member(C, [marca, modelo, motor]))]) :-
+test(texto_vacio, [forall(member(C, [marca, modelo, cilindrada]))]) :- invalido(C, "   ").
+test(texto_largo, [forall(member(C, [marca, modelo, cilindrada]))]) :-
     length(Cs, 41), maplist(=(0'a), Cs), string_codes(S, Cs), invalido(C, S).
 test(texto_con_control) :- invalido(marca, "Ford\u0007").
 test(combustible_desconocido, [forall(member(C, ["carbon", "", 3]))]) :- invalido(combustible, C).
