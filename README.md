@@ -50,7 +50,27 @@ Respuesta:
  "error": {"codigo": "kb_invalida", "mensaje": "la base de conocimiento es inválida",
            "problemas": ["accion_componente: accion inexistente fantasma"]}}
 ```
-- Operaciones: `ping` → `[{"mensaje": "pong"}]`.
+- `entrada_invalida` (solo `diagnosticar`): síntomas inexistentes, estados fuera de rango,
+  repetidos, hallazgos de pruebas inexistentes o `sintomas`/`hallazgos` que no son objetos;
+  añade `error.problemas` (lista de textos).
+- Operaciones: `ping` → `[{"mensaje": "pong"}]`; `diagnosticar` (abajo).
+
+### `diagnosticar`
+
+```
+{"id": 2, "op": "diagnosticar", "args": {
+  "sintomas":  {"chirrido_frenos": "presente", "pedal_freno_esponjoso": "presente"},
+  "hallazgos": {"hall_medir_espesor_pastillas_freno": "normal"}}}
+```
+`sintomas`: `presente | ausente | desconocido`. `hallazgos` (opcional, resultados de pruebas,
+id `hall_<prueba>`): `normal | leve | severo`; se aplican cuando el ciclo recomienda esa prueba
+(`hallazgos_no_aplicados` lista los que no se pidieron). Sin síntomas → `sin_resultados`.
+Un resultado (`resultados[0]`): `concluyente`, `motivo` (`sin_inciertos`, `max_iteraciones`,
+`prueba_pendiente`, `sin_pruebas`, `contradiccion`), `iteraciones`, `componentes`
+(`id, nombre, probabilidad, estado`), `acciones` (`relevancia`), `pruebas_sugeridas`,
+`explicacion`, `traza` (apilar / prueba / rb1 / rb3), `pruebas_hechas`. Un resultado no
+concluyente no es un error: pide la prueba de `pruebas_sugeridas[0]`; el cliente la repite con
+su hallazgo. Solo se investigan los inciertos con evidencia y P ≥ `tau_candidato` (0,25).
 
 El cliente C correlaciona la respuesta por `id` y trata swipl caído / timeout (5 s) /
 respuesta inválida como error de conexión, mostrado en la ventana con botón «Reintentar».

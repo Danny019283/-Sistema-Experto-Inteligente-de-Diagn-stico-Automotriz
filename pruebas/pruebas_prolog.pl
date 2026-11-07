@@ -1,6 +1,9 @@
 :- use_module(library(plunit)).
 :- use_module('../backend/servidor_json').
 :- use_module('../backend/validacion').
+:- use_module('../backend/inferencia').
+:- use_module('../backend/reglas').
+:- use_module('../backend/consultas').
 :- ensure_loaded('../backend/hechos').
 
 :- begin_tests(contrato_base).
@@ -38,7 +41,8 @@ deshacer(undo(Refs, Quitados)) :-
 test(valores_del_issue, [forall(member(N-V, [tau_alto-0.85, tau_bajo-0.05,
                                              max_iteraciones-5, alpha-1]))]) :-
     parametro(N, V).
-test(sin_duplicados, [forall(member(N, [tau_alto, tau_bajo, max_iteraciones, alpha]))]) :-
+test(tau_candidato) :- parametro(tau_candidato, 0.25).
+test(sin_duplicados, [forall(member(N, [tau_alto, tau_bajo, tau_candidato, max_iteraciones, alpha]))]) :-
     findall(V, parametro(N, V), [_]).
 :- end_tests(parametros).
 
@@ -254,6 +258,10 @@ test(max_iteraciones_invalido) :-
     reporta([parametro(max_iteraciones, 5)], [parametro(max_iteraciones, 0)], "max_iteraciones").
 test(alpha_invalido) :-
     reporta([parametro(alpha, 1)], [parametro(alpha, 0)], "alpha").
+test(tau_candidato_faltante) :-
+    reporta([parametro(tau_candidato, 0.25)], [], "falta el parámetro").
+test(tau_candidato_fuera_de_rango) :-
+    reporta([parametro(tau_candidato, 0.25)], [parametro(tau_candidato, 2)], "tau_candidato").
 
 test(reporta_todos_los_problemas) :-
     modificada([], [accion_componente(fantasma, bateria, 0.5), incompatibilidad(no_arranca, no_arranca)],
@@ -366,3 +374,376 @@ test(acciones_del_resultado_final) :-
     cerca(1 - (1 - 0.93 * M1), 0.88, 0.01),
     cerca(1 - (1 - 0.93 * M2), 0.47, 0.01), !.
 :- end_tests(pdf_seccion6).
+
+% ---------------------------------------------------------------------------
+% F02 capa 1: Naive Bayes + Laplace en log-odds (backend/inferencia.pl).
+% ---------------------------------------------------------------------------
+:- begin_tests(capa1).
+cerca(X, Y, Tol) :- abs(X - Y) =< Tol.
+entrada([chirrido_frenos-presente, pedal_freno_esponjoso-presente]).
+
+test(estado_inicial_63_44_31,
+     [forall(member(C-Esp, [pastillas_freno-0.63, liquido_frenos-0.44, discos_freno-0.31]))]) :-
+    entrada(X), probabilidad(C, X, P), cerca(P, Esp, 0.02),
+    estado_componente(P, incierto).
+test(verosimilitud_laplace) :-
+    verosimilitud(liquido_frenos, pedal_freno_esponjoso, presente, PP-PN),
+    cerca(PP, 86/101, 1.0e-9), cerca(PN, 85/903, 1.0e-9).
+test(hallazgo_usa_tres_estados) :-      % |Vi| = 3
+    componente_sintoma(pastillas_freno, hall_medir_espesor_pastillas_freno, normal, P, N),
+    componente(pastillas_freno, _, Np, Nn),
+    verosimilitud(pastillas_freno, hall_medir_espesor_pastillas_freno, normal, PP-PN),
+    cerca(PP, (P + 1) / (Np + 3), 1.0e-9), cerca(PN, (N + 1) / (Nn + 3), 1.0e-9), !.
+test(iteracion_1_pastillas_refutada) :-
+    entrada(X),
+    probabilidad(pastillas_freno, [hall_medir_espesor_pastillas_freno-normal|X], P),
+    cerca(P, 0.039, 0.005), estado_componente(P, descartado).
+test(iteracion_2_liquido_confirmado) :-
+    entrada(X),
+    probabilidad(liquido_frenos, [hall_revisar_nivel_estado_liquido_frenos-severo|X], P),
+    cerca(P, 0.93, 0.02), estado_componente(P, confirmado).
+test(iteracion_3_discos_descartado) :-
+    entrada(X),
+    probabilidad(discos_freno, [hall_inspeccionar_disco_rayaduras_alabeo-normal|X], P),
+    cerca(P, 0.025, 0.005), estado_componente(P, descartado).
+test(desconocido_no_entra) :-
+    entrada(X), probabilidad(pastillas_freno, X, P),
+    probabilidad(pastillas_freno, [luz_abs_encendida-desconocido|X], P).
+test(ausente_excluye) :-
+    probabilidad(pastillas_freno, [chirrido_frenos-ausente], A),
+    probabilidad(pastillas_freno, [], Prior), A < Prior.
+test(sintoma_sin_fila_no_aporta) :-
+    probabilidad(discos_freno, [], P0),
+    probabilidad(discos_freno, [luz_abs_encendida-presente], P0).
+test(contribuciones_explican_el_logit) :-
+    entrada(X), contribuciones(liquido_frenos, X, Cs),
+    memberchk(pedal_freno_esponjoso-L, Cs), cerca(L, log(9.0), 0.1).
+test(sin_ln_cero_con_conteos_extremos) :-
+    modificada([componente_sintoma(liquido_frenos, chirrido_frenos, presente, 19, 225)],
+               [componente_sintoma(liquido_frenos, chirrido_frenos, presente, 0, 0)],
+               ( contribucion(liquido_frenos, chirrido_frenos, ausente, L), number(L) )).
+test(cambiar_un_conteo_cambia_el_resultado) :-
+    entrada(X), probabilidad(liquido_frenos, X, P0),
+    modificada([componente_sintoma(liquido_frenos, pedal_freno_esponjoso, presente, 85, 84)],
+               [componente_sintoma(liquido_frenos, pedal_freno_esponjoso, presente, 10, 84)],
+               ( probabilidad(liquido_frenos, X, P1), P1 < P0 )).
+test(umbrales, [forall(member(P-E, [0.85-confirmado, 0.9-confirmado, 0.05-descartado,
+                                    0.01-descartado, 0.5-incierto]))]) :-
+    estado_componente(P, E).
+:- end_tests(capa1).
+
+% ---------------------------------------------------------------------------
+% F02 capas 2 y 3: noisy-OR (pruebas y acciones).
+% ---------------------------------------------------------------------------
+:- begin_tests(capas23).
+cerca(X, Y, Tol) :- abs(X - Y) =< Tol.
+entrada([chirrido_frenos-presente, pedal_freno_esponjoso-presente]).
+
+test(rp_un_sintoma_presente) :-
+    relevancia_prueba(medir_espesor_pastillas_freno, [chirrido_frenos-presente], R),
+    cerca(R, 0.70, 1.0e-9).
+test(rp_noisy_or_de_dos_sintomas) :-      % 1 - (1-0.70)(1-0.70) = 0.91
+    relevancia_prueba(medir_espesor_pastillas_freno,
+                      [chirrido_frenos-presente, pedal_freno_pulsa-presente], R),
+    cerca(R, 0.91, 1.0e-9).
+test(rp_solo_cuentan_los_presentes) :-
+    relevancia_prueba(medir_espesor_pastillas_freno,
+                      [chirrido_frenos-ausente, pedal_freno_pulsa-desconocido], R),
+    R =:= 0.
+test(rp_prueba_inexistente_falla, [fail]) :-
+    relevancia_prueba(no_existe, [], _).
+test(pruebas_ordenadas_y_sin_las_hechas) :-
+    entrada(X),
+    pruebas_del_componente(pastillas_freno, X, [], L),
+    L = [R1-medir_espesor_pastillas_freno|_], R1 > 0,
+    pruebas_del_componente(pastillas_freno, X, [medir_espesor_pastillas_freno], L2),
+    \+ memberchk(_-medir_espesor_pastillas_freno, L2),
+    msort(L, M), reverse(M, Desc), pairs_keys(Desc, Ks), pairs_keys(L, Ks).
+test(ra_del_pdf_88_y_47) :-
+    Conf = [liquido_frenos-0.93],
+    relevancia_accion(purgar_cambiar_liquido_frenos, Conf, A),
+    relevancia_accion(revisar_fugas_circuito_frenos, Conf, B),
+    cerca(A, 0.88, 0.01), cerca(B, 0.47, 0.01).
+test(ra_sin_confirmados_es_cero) :-
+    relevancia_accion(purgar_cambiar_liquido_frenos, [], R), R =:= 0.
+test(ra_ignora_componentes_que_la_accion_no_atiende) :-
+    relevancia_accion(purgar_cambiar_liquido_frenos, [pastillas_freno-0.99], R), R =:= 0.
+test(ra_noisy_or_de_dos_componentes) :-   % 1 - (1-0.9*0.8)(1-0.9*0.5)
+    accion_componente(rellenar_liquido_embrague, cilindro_maestro_embrague, M1),
+    accion_componente(rellenar_liquido_embrague, cilindro_esclavo_embrague, M2),
+    relevancia_accion(rellenar_liquido_embrague,
+                      [cilindro_maestro_embrague-0.9, cilindro_esclavo_embrague-0.9], R),
+    cerca(R, 1 - (1 - 0.9 * M1) * (1 - 0.9 * M2), 1.0e-9), !.
+test(acciones_ordenadas_de_mayor_a_menor) :-
+    acciones_ordenadas([liquido_frenos-0.93], L),
+    L = [R1-purgar_cambiar_liquido_frenos, R2-_|_], R1 >= R2,
+    \+ ( member(R-_, L), R =< 0 ).
+:- end_tests(capas23).
+
+% ---------------------------------------------------------------------------
+% F02 reglas: validación de la entrada (RNF-01), R2b, clasificación y candidatos.
+% ---------------------------------------------------------------------------
+:- begin_tests(reglas_base).
+problema(Entrada, Texto) :-
+    validar_entrada(Entrada, Ps), member(P, Ps), sub_string(P, _, _, _, Texto), !.
+entrada([chirrido_frenos-presente, pedal_freno_esponjoso-presente]).
+
+test(entrada_valida) :-
+    validar_entrada([chirrido_frenos-presente, luz_abs_encendida-ausente,
+                     pedal_freno_pulsa-desconocido,
+                     hall_medir_espesor_pastillas_freno-normal], []).
+test(entrada_vacia_es_valida) :- validar_entrada([], []).
+test(sintoma_inexistente) :- problema([fantasma-presente], "síntoma inexistente").
+test(estado_invalido_en_sintoma) :- problema([chirrido_frenos-normal], "estado inválido").
+test(estado_invalido_en_hallazgo) :-
+    problema([hall_medir_espesor_pastillas_freno-presente], "estado inválido").
+test(sintoma_repetido) :-
+    problema([chirrido_frenos-presente, chirrido_frenos-ausente], "síntoma repetido").
+test(entrada_no_lista) :- validar_entrada(foo, [_]).
+test(elemento_mal_formado) :- problema([chirrido_frenos], "mal formada").
+test(hallazgo_de_prueba_inexistente) :-
+    modificada([], [sintoma(hall_fantasma, 'Resultado: fantasma', hallazgo)],
+               problema([hall_fantasma-normal], "prueba inexistente")).
+
+test(contradiccion_detectada) :-
+    contradicciones([no_arranca-presente, ralenti_inestable-presente], [no_arranca-ralenti_inestable]).
+test(sin_contradiccion_si_uno_ausente) :-
+    contradicciones([no_arranca-presente, ralenti_inestable-ausente], []).
+
+test(clasificar_estado_inicial) :-
+    entrada(X), clasificar(X, [P1-pastillas_freno-incierto, P2-liquido_frenos-incierto,
+                               P3-discos_freno-incierto|_]),
+    P1 > P2, P2 > P3.
+test(sin_evidencia_no_es_hipotesis) :-
+    clasificar([no_arranca-presente], L), \+ memberchk(_-pastillas_freno-_, L).
+test(candidatos_del_pdf) :-
+    entrada(X), candidatos(X, [pastillas_freno, liquido_frenos, discos_freno]).
+test(candidatos_excluyen_confirmados_y_descartados) :-
+    entrada(X0), X = [hall_medir_espesor_pastillas_freno-normal|X0],
+    candidatos(X, Cs), \+ memberchk(pastillas_freno, Cs).
+test(confirmados_con_probabilidad) :-
+    entrada(X0), X = [hall_revisar_nivel_estado_liquido_frenos-severo|X0],
+    confirmados(X, Conf), memberchk(liquido_frenos-P, Conf), P >= 0.85.
+:- end_tests(reglas_base).
+
+% ---------------------------------------------------------------------------
+% F02 ciclo R1-R11: traza del PDF §6, parada, pruebas pendientes y casos límite.
+% ---------------------------------------------------------------------------
+:- begin_tests(ciclo).
+cerca(X, Y, Tol) :- abs(X - Y) =< Tol.
+sintomas([chirrido_frenos-presente, pedal_freno_esponjoso-presente]).
+hallazgos([hall_medir_espesor_pastillas_freno-normal,
+           hall_revisar_nivel_estado_liquido_frenos-severo,
+           hall_inspeccionar_disco_rayaduras_alabeo-normal]).
+pdf(R) :- sintomas(S), hallazgos(H), append(S, H, E), diagnosticar(E, R).
+comp(R, Id, C) :- member(C, R.componentes), C.id == Id, !.
+eventos(R, Es) :- findall(E, ( member(T, R.traza), E = T.evento ), Es).
+
+test(traza_del_pdf_concluyente_en_3_de_5) :-
+    pdf(R), R.concluyente == true, R.motivo == sin_inciertos, R.iteraciones == 3.
+test(traza_del_pdf_probabilidades_y_estados) :-
+    pdf(R),
+    comp(R, liquido_frenos, L), L.estado == confirmado, cerca(L.probabilidad, 0.93, 0.02),
+    comp(R, pastillas_freno, P), P.estado == descartado, cerca(P.probabilidad, 0.039, 0.005),
+    comp(R, discos_freno, D), D.estado == descartado, cerca(D.probabilidad, 0.025, 0.005).
+test(traza_del_pdf_eventos_y_retrocesos) :-
+    pdf(R), eventos(R, Es),
+    Es == [apilar, prueba, rb1, prueba, rb3, prueba, rb1],
+    findall(F, ( member(T, R.traza), T.evento == prueba, F = T.foco ), Focos),
+    Focos == [pastillas_freno, liquido_frenos, discos_freno].
+test(traza_del_pdf_accion_88) :-
+    pdf(R), R.acciones = [A, B|_],
+    A.id == purgar_cambiar_liquido_frenos, cerca(A.relevancia, 0.88, 0.01),
+    B.id == revisar_fugas_circuito_frenos, cerca(B.relevancia, 0.47, 0.01).
+test(traza_del_pdf_explicacion_del_liquido) :-
+    pdf(R), member(Ex, R.explicacion), Ex.componente == liquido_frenos,
+    Ex.aportes = [A1, A2|_], A1.aporte >= A2.aporte,
+    memberchk(pedal_freno_esponjoso, [A1.sintoma, A2.sintoma]), !.
+test(traza_del_pdf_pruebas_hechas_y_nada_sugerido) :-
+    pdf(R), length(R.pruebas_hechas, 3), R.pruebas_sugeridas == [],
+    R.hallazgos_no_aplicados == [].
+test(estado_inicial_sin_resultados_de_pruebas) :-
+    sintomas(S), diagnosticar(S, R),
+    R.concluyente == false, R.motivo == prueba_pendiente, R.iteraciones == 0,
+    comp(R, pastillas_freno, P), cerca(P.probabilidad, 0.63, 0.02), P.estado == incierto,
+    R.pruebas_sugeridas = [S1|_], S1.prueba == medir_espesor_pastillas_freno,
+    S1.componente == pastillas_freno.
+test(se_detiene_en_la_prueba_pendiente) :-
+    sintomas(S), diagnosticar([hall_medir_espesor_pastillas_freno-normal|S], R),
+    R.iteraciones == 1, R.motivo == prueba_pendiente,
+    R.pruebas_sugeridas = [S1|_], S1.componente == liquido_frenos.
+test(hallazgo_no_pedido_se_informa) :-
+    sintomas(S), diagnosticar([hall_medir_voltaje_bateria-normal|S], R),
+    R.hallazgos_no_aplicados == [hall_medir_voltaje_bateria].
+test(max_iteraciones_es_no_concluyente_no_error) :-
+    modificada([parametro(max_iteraciones, 5)], [parametro(max_iteraciones, 2)], pdf(R)),
+    R.concluyente == false, R.motivo == max_iteraciones, R.iteraciones == 2.
+test(foco_sin_pruebas_pasa_al_siguiente_y_no_concluye) :-
+    modificada([prueba_componente(inspeccionar_disco_rayaduras_alabeo, discos_freno),
+                prueba_componente(medir_espesor_disco_freno, discos_freno)], [], pdf(R)),
+    R.concluyente == false, R.motivo == sin_pruebas.
+test(foco_sin_pruebas_queda_en_la_traza) :-
+    modificada([prueba_componente(inspeccionar_disco_rayaduras_alabeo, discos_freno),
+                prueba_componente(medir_espesor_disco_freno, discos_freno)], [],
+               ( pdf(R), eventos(R, Es) )),
+    memberchk(sin_pruebas, Es).
+test(contradiccion_detiene_el_ciclo) :-
+    diagnosticar([no_arranca-presente, ralenti_inestable-presente], R),
+    R.motivo == contradiccion, R.concluyente == false,
+    R.contradicciones = [P], P.a == no_arranca, P.b == ralenti_inestable.
+test(sin_sintomas_no_hay_hipotesis) :-
+    diagnosticar([], R), R.componentes == [], R.acciones == [].
+test(ejemplo_del_enunciado_circuito_de_arranque) :-
+    diagnosticar([no_arranca-presente, motor_no_gira-presente, faros_tenues-ausente,
+                  hall_medir_voltaje_bateria-normal], R),
+    comp(R, rele_arranque, Rele), Rele.estado == confirmado,
+    comp(R, circuito_control_arranque, Circ), Circ.estado == confirmado,
+    comp(R, solenoide_arranque, Sol), Sol.estado \== descartado,
+    \+ comp(R, pastillas_freno, _).
+test(cambiar_un_conteo_cambia_el_diagnostico) :-
+    pdf(R0), comp(R0, liquido_frenos, L0),
+    componente_sintoma(liquido_frenos, hall_revisar_nivel_estado_liquido_frenos, severo, N1, N2), !,
+    modificada([componente_sintoma(liquido_frenos, hall_revisar_nivel_estado_liquido_frenos, severo, N1, N2)],
+               [componente_sintoma(liquido_frenos, hall_revisar_nivel_estado_liquido_frenos, severo, 1, N2)],
+               ( pdf(R1), comp(R1, liquido_frenos, L1), L1.probabilidad < L0.probabilidad )).
+:- end_tests(ciclo).
+
+% ---------------------------------------------------------------------------
+% F02 operación JSON `diagnosticar` (RNF-01 validaciones, RNF-02 errores).
+% ---------------------------------------------------------------------------
+:- begin_tests(op_diagnosticar).
+diag(Args, R) :-
+    format(string(L), "{\"id\":7,\"op\":\"diagnosticar\",\"args\":~s}", [Args]),
+    procesar_linea(L, R).
+pdf_args("{\"sintomas\":{\"chirrido_frenos\":\"presente\",\"pedal_freno_esponjoso\":\"presente\"},
+  \"hallazgos\":{\"hall_medir_espesor_pastillas_freno\":\"normal\",
+                 \"hall_revisar_nivel_estado_liquido_frenos\":\"severo\",
+                 \"hall_inspeccionar_disco_rayaduras_alabeo\":\"normal\"}}").
+problema(R, Texto) :- member(P, R.error.problemas), sub_string(P, _, _, _, Texto), !.
+
+test(traza_del_pdf_por_json) :-
+    pdf_args(A), diag(A, R), R.id == 7, R.estado == ok, R.resultados = [D],
+    D.concluyente == true, D.iteraciones == 3.
+test(sin_hallazgos_es_no_concluyente_ok) :-
+    diag("{\"sintomas\":{\"chirrido_frenos\":\"presente\"}}", R),
+    R.estado == ok, R.resultados = [D], D.concluyente == false.
+test(sin_sintomas_es_sin_resultados) :-
+    diag("{}", R), R.estado == sin_resultados, R.resultados == [].
+test(solo_hallazgos_es_sin_resultados) :-
+    diag("{\"hallazgos\":{\"hall_medir_voltaje_bateria\":\"normal\"}}", R),
+    R.estado == sin_resultados.
+test(sintoma_inexistente) :-
+    diag("{\"sintomas\":{\"fantasma\":\"presente\"}}", R),
+    R.estado == error, R.error.codigo == entrada_invalida, problema(R, "síntoma inexistente").
+test(estado_invalido) :-
+    diag("{\"sintomas\":{\"chirrido_frenos\":\"quizas\"}}", R),
+    R.error.codigo == entrada_invalida, problema(R, "estado inválido").
+test(estado_no_cadena) :-
+    diag("{\"sintomas\":{\"chirrido_frenos\":1}}", R),
+    R.error.codigo == entrada_invalida.
+test(hallazgo_en_sintomas_es_invalido) :-
+    diag("{\"sintomas\":{\"hall_medir_voltaje_bateria\":\"presente\"}}", R),
+    R.error.codigo == entrada_invalida.
+test(sintomas_no_es_objeto) :-
+    diag("{\"sintomas\":[\"chirrido_frenos\"]}", R),
+    R.error.codigo == entrada_invalida, problema(R, "objeto JSON").
+test(varios_problemas_a_la_vez) :-
+    diag("{\"sintomas\":{\"x\":\"presente\",\"y\":\"presente\"}}", R),
+    length(R.error.problemas, 2).
+test(contradiccion_por_json) :-
+    diag("{\"sintomas\":{\"no_arranca\":\"presente\",\"ralenti_inestable\":\"presente\"}}", R),
+    R.estado == ok, R.resultados = [D], D.motivo == contradiccion.
+test(respuesta_serializable_a_json) :-
+    pdf_args(A), diag(A, R),
+    with_output_to(string(S), json_write_dict(current_output, R, [width(0)])),
+    sub_string(S, _, _, _, "\"concluyente\":true"),
+    atom_json_dict(S, _, []), !.
+test(con_la_kb_rota_responde_kb_invalida) :-
+    modificada([], [accion_componente(fantasma, liquido_frenos, 0.5)],
+               ( pdf_args(A), diag(A, R) )),
+    R.error.codigo == kb_invalida.
+:- end_tests(op_diagnosticar).
+
+% ---------------------------------------------------------------------------
+% F02 consultas.pl (≥10 consultas distintas) y mínimos de la sección 5.
+% ---------------------------------------------------------------------------
+:- begin_tests(consultas).
+test(sintomas_de) :- sintomas_de(liquido_frenos, Ss),
+    memberchk(pedal_freno_esponjoso, Ss), \+ ( member(S, Ss), sintoma(S, _, hallazgo) ).
+test(componentes_de) :- componentes_de(pedal_freno_esponjoso, Cs),
+    memberchk(liquido_frenos, Cs), memberchk(pastillas_freno, Cs), memberchk(discos_freno, Cs).
+test(pruebas_para) :- pruebas_para(pastillas_freno, Ps), memberchk(medir_espesor_pastillas_freno, Ps).
+test(componentes_de_prueba) :-
+    componentes_de_prueba(medir_voltaje_bateria, Cs), memberchk(rele_arranque, Cs).
+test(sintomas_de_prueba) :-
+    sintomas_de_prueba(medir_espesor_pastillas_freno, Ss), memberchk(chirrido_frenos-0.70, Ss).
+test(acciones_para_ordenadas) :-
+    acciones_para(liquido_frenos, [M1-purgar_cambiar_liquido_frenos, M2-_|_]), M1 >= M2.
+test(mejor_accion) :- mejor_accion(liquido_frenos, purgar_cambiar_liquido_frenos).
+test(mejor_accion_sin_acciones_falla, [fail]) :- mejor_accion(componente_inexistente, _).
+test(incompatibles_en_ambos_sentidos) :-
+    incompatibles_con(no_arranca, A), memberchk(ralenti_inestable, A),
+    incompatibles_con(ralenti_inestable, B), memberchk(no_arranca, B).
+test(prior_del_pdf) :- prior(pastillas_freno, P), abs(P - 0.40) < 0.01.
+test(sintomas_comunes) :-
+    sintomas_comunes(liquido_frenos, pastillas_freno, Ss), memberchk(chirrido_frenos, Ss).
+test(componentes_sin_pruebas_es_lista) :- componentes_sin_pruebas(Cs), is_list(Cs).
+test(mas_probables) :-
+    componentes_mas_probables([chirrido_frenos-presente, pedal_freno_esponjoso-presente], 2,
+                              [_-pastillas_freno, _-liquido_frenos]).
+test(hallazgos_de_prueba) :-
+    hallazgos_de_prueba(medir_espesor_pastillas_freno, Hs), memberchk(normal, Hs).
+test(consultas_calculan_sobre_la_kb) :-
+    modificada([], [prueba_componente(medir_voltaje_bateria, discos_freno)],
+               ( componentes_de_prueba(medir_voltaje_bateria, Cs), memberchk(discos_freno, Cs) )).
+:- end_tests(consultas).
+
+% Sección 5 (issue #55): mínimos medibles sobre el código.
+:- begin_tests(minimos_seccion5).
+propios(M, N) :-
+    aggregate_all(count, ( current_predicate(M:Nom/Ar), functor(H, Nom, Ar),
+                           \+ predicate_property(M:H, imported_from(_)),
+                           predicate_property(M:H, number_of_clauses(_)) ), N).
+test(al_menos_15_predicados_propios) :-
+    propios(inferencia, A), propios(reglas, B), propios(consultas, C), A + B + C >= 15.
+test(al_menos_13_consultas_distintas) :-
+    module_property(consultas, exports(Es)), length(Es, N), N >= 10.
+test(al_menos_20_reglas_logicas) :-
+    aggregate_all(count, ( member(M, [inferencia, reglas, consultas]),
+                           current_predicate(M:Nom/Ar), functor(H, Nom, Ar),
+                           \+ predicate_property(M:H, imported_from(_)),
+                           clause(M:H, Body), Body \== true ), N), N >= 20.
+test(al_menos_2_reglas_recursivas) :-
+    aggregate_all(count, ( member(M, [inferencia, reglas, consultas]),
+                           current_predicate(M:Nom/Ar), functor(H, Nom, Ar),
+                           \+ predicate_property(M:H, imported_from(_)),
+                           clause(M:H, B), sub_term(G, B), callable(G), functor(G, Nom, Ar) ),
+                  N),
+    N >= 2.
+test(los_recursivos_clave_existen, [forall(member(M:P, [inferencia:sumar/2, inferencia:complemento/2,
+                                                        reglas:primer_candidato/5]))]) :-
+    P = Nom/Ar, functor(H, Nom, Ar), clause(M:H, B), sub_term(G, B), callable(G),
+    functor(G, Nom, Ar), !.
+% El ciclo es mutuamente recursivo: ciclo/2 -> foco/paso -> ciclo/2.
+llama(M, De, A) :- De = Nom/Ar, functor(H, Nom, Ar), clause(M:H, B), sub_term(G, B), callable(G),
+    A = N2/Ar2, functor(G, N2, Ar2), !.
+test(ciclo_es_mutuamente_recursivo) :-
+    llama(reglas, ciclo/2, paso/3), llama(reglas, paso/3, ciclo/2).
+test(al_menos_5_reglas_compuestas) :-       % cuerpo con 3 o más condiciones en conjunción
+    aggregate_all(count, ( member(M, [inferencia, reglas, consultas]),
+                           current_predicate(M:Nom/Ar), functor(H, Nom, Ar),
+                           \+ predicate_property(M:H, imported_from(_)),
+                           clause(M:H, B), conjuncion(B, K), K >= 3 ), N),
+    N >= 5.
+test(al_menos_3_operaciones_con_listas) :-
+    Ops = [append, member, memberchk, length, sort, msort, reverse, intersection, partition,
+           exclude, maplist, select, nth0, findall],
+    aggregate_all(count, ( member(Op, Ops), usa_op(Op) ), N),
+    N >= 3.
+conjuncion((A, B), K) :- !, conjuncion(A, Ka), conjuncion(B, Kb), K is Ka + Kb.
+conjuncion(_, 1).
+usa_op(Op) :-
+    member(M, [inferencia, reglas, consultas]), current_predicate(M:Nom/Ar), functor(H, Nom, Ar),
+    \+ predicate_property(M:H, imported_from(_)), \+ predicate_property(M:H, built_in),
+    clause(M:H, B), sub_term(G, B), callable(G), functor(G, Op, _), !.
+:- end_tests(minimos_seccion5).
