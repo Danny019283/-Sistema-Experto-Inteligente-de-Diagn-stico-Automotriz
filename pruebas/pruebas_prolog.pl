@@ -747,3 +747,55 @@ usa_op(Op) :-
     \+ predicate_property(M:H, imported_from(_)), \+ predicate_property(M:H, built_in),
     clause(M:H, B), sub_term(G, B), callable(G), functor(G, Op, _), !.
 :- end_tests(minimos_seccion5).
+
+% F04 (issue #56): vehículo de la sesión (vehiculo/6) y operaciones JSON.
+:- begin_tests(vehiculo).
+:- use_module('../backend/vehiculo').
+ok_json("{\"marca\":\"Toyota\",\"modelo\":\"Corolla\",\"anio\":2015,\"cilindrada\":\"1.8 L\",\"combustible\":\"gasolina\",\"kilometraje\":120000}").
+peticion(Op, Args, R) :-
+    format(string(L), "{\"id\":7,\"op\":\"~w\",\"args\":~s}", [Op, Args]), procesar_linea(L, R).
+limpio :- retractall(vehiculo:vehiculo(_, _, _, _, _, _)).
+% Cambia un campo del JSON válido y devuelve la respuesta del registro.
+con_campo(Campo, Valor, R) :-
+    ok_json(J), atom_json_dict(J, D0, []), put_dict(Campo, D0, Valor, D),
+    with_output_to(string(S), json_write_dict(current_output, D, [width(0)])),
+    peticion(registrar_vehiculo, S, R).
+invalido(Campo, Valor) :-
+    limpio, con_campo(Campo, Valor, R), R.estado == error, R.error.codigo == entrada_invalida,
+    [P] = R.error.problemas, sub_string(P, 0, _, _, Campo), \+ vehiculo:vehiculo(_, _, _, _, _, _).
+
+test(consultar_sin_registro, [setup(limpio)]) :-
+    peticion(consultar_vehiculo, "{}", R), R.estado == sin_resultados.
+test(registrar_y_consultar, [setup(limpio)]) :-
+    ok_json(J), peticion(registrar_vehiculo, J, R),
+    R.estado == ok, [V] = R.resultados, V.marca == "Toyota", V.anio == 2015, V.combustible == gasolina,
+    vehiculo:vehiculo("Toyota", "Corolla", 2015, "1.8 L", gasolina, 120000),
+    peticion(consultar_vehiculo, "{}", R2), [V2] = R2.resultados, V2.kilometraje == 120000.
+test(editar_reemplaza_el_anterior, [setup(limpio)]) :-
+    ok_json(J), peticion(registrar_vehiculo, J, _),
+    con_campo(kilometraje, 130000, R), R.estado == ok,
+    aggregate_all(count, vehiculo:vehiculo(_, _, _, _, _, _), 1),
+    vehiculo:vehiculo(_, _, _, _, _, 130000).
+test(textos_se_recortan, [setup(limpio)]) :-
+    con_campo(marca, "  Ford  ", R), R.estado == ok, vehiculo:vehiculo("Ford", _, _, _, _, _).
+test(anio_limites, [setup(limpio), forall(member(A, [1950, 2026, 2027]))]) :-
+    get_time(T), stamp_date_time(T, date(Y, _, _, _, _, _, _, _, _), local),
+    con_campo(anio, A, R),
+    ( A =< Y + 1 -> R.estado == ok ; R.estado == error ).
+test(anio_fuera_de_rango, [forall(member(A, [1949, 3000, -1]))]) :- invalido(anio, A).
+test(anio_no_entero, [forall(member(A, ["2015", 2015.5, null]))]) :- invalido(anio, A).
+test(km_negativo) :- invalido(kilometraje, -1).
+test(km_no_entero, [forall(member(K, ["abc", 1.5]))]) :- invalido(kilometraje, K).
+test(km_cero_valido, [setup(limpio)]) :- con_campo(kilometraje, 0, R), R.estado == ok.
+test(texto_vacio, [forall(member(C, [marca, modelo, cilindrada]))]) :- invalido(C, "   ").
+test(texto_largo, [forall(member(C, [marca, modelo, cilindrada]))]) :-
+    length(Cs, 41), maplist(=(0'a), Cs), string_codes(S, Cs), invalido(C, S).
+test(texto_con_control) :- invalido(marca, "Ford\u0007").
+test(combustible_desconocido, [forall(member(C, ["carbon", "", 3]))]) :- invalido(combustible, C).
+test(varios_errores_listan_todos, [setup(limpio)]) :-
+    peticion(registrar_vehiculo, "{\"marca\":\"\",\"anio\":1,\"kilometraje\":-5}", R),
+    R.error.codigo == entrada_invalida, length(R.error.problemas, 6).
+test(error_no_borra_el_registro, [setup(limpio)]) :-
+    ok_json(J), peticion(registrar_vehiculo, J, _), con_campo(anio, 1900, R), R.estado == error,
+    vehiculo:vehiculo(_, _, 2015, _, _, _).
+:- end_tests(vehiculo).

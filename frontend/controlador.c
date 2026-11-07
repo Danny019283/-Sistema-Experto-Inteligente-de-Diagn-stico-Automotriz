@@ -7,6 +7,7 @@
 void controlador_iniciar(Controlador *k, const char *script) {
     memset(k, 0, sizeof *k);
     k->script = script;
+    vehiculo_form_iniciar(&k->form);
     snprintf(k->mensaje, sizeof k->mensaje, "Sin probar.");
 }
 
@@ -47,12 +48,51 @@ int controlador_interpretar(Controlador *k, const cJSON *resp) {
     return 1;
 }
 
+static int enviar_vehiculo(Controlador *k, const FormVehiculo *f, FormVehiculo *recibido) {
+    char err[256] = "";
+    k->error_form[0] = '\0';
+    memset(k->errores, 0, sizeof k->errores);
+    cJSON *r = conexion_peticion(&k->con, "registrar_vehiculo", vehiculo_a_json(f), err, sizeof err);
+    if (!r) {
+        k->hay_error = 1;
+        snprintf(k->mensaje, sizeof k->mensaje, "Error de conexión: %s", err);
+        return 0;
+    }
+    int ok = 0;
+    if (controlador_interpretar(k, r)) {
+        k->hay_error = 0; /* Prolog respondió: la conexión está bien, el error es de los datos */
+        if (!vehiculo_errores_prolog(r, k->errores)) snprintf(k->error_form, sizeof k->error_form, "%s", k->mensaje);
+    } else {
+        ok = vehiculo_desde_json(recibido, cJSON_GetArrayItem(cJSON_GetObjectItem(r, "resultados"), 0));
+        if (!ok) snprintf(k->error_form, sizeof k->error_form, "Respuesta inesperada de Prolog al registrar el vehículo");
+    }
+    cJSON_Delete(r);
+    return ok;
+}
+
+int controlador_registrar_vehiculo(Controlador *k) {
+    if (vehiculo_validar(&k->form, k->errores)) {
+        k->error_form[0] = '\0';
+        return 0;
+    }
+    FormVehiculo v;
+    if (!enviar_vehiculo(k, &k->form, &v)) return 0;
+    k->form = k->guardado = v;
+    k->registrado = 1;
+    return 1;
+}
+
 void controlador_probar_conexion(Controlador *k) {
     char err[256] = "";
-    if (!conexion_viva(&k->con) && conexion_abrir(&k->con, k->script, err, sizeof err) < 0) {
+    int nuevo = !conexion_viva(&k->con);
+    if (nuevo && conexion_abrir(&k->con, k->script, err, sizeof err) < 0) {
         k->hay_error = 1;
         snprintf(k->mensaje, sizeof k->mensaje, "No se pudo lanzar swipl: %s", err);
         return;
+    }
+    if (nuevo && k->registrado) { /* swipl nuevo: el vehículo vive en Prolog, se vuelve a registrar */
+        FormVehiculo v;
+        enviar_vehiculo(k, &k->guardado, &v);
     }
     cJSON *r = conexion_peticion(&k->con, "ping", NULL, err, sizeof err);
     if (!r) {

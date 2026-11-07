@@ -38,17 +38,72 @@ static void lineas(struct nk_context *ctx, const char *txt, float alto) {
     }
 }
 
-/* Contenido provisional de cada pantalla hasta F04-F10. Los botones "Simular"
+/* Fila "etiqueta + campo de texto" y, debajo, el error del campo si lo hay (RNF-02). */
+static void campo_texto(struct nk_context *ctx, const char *etiqueta, char *buf, int n, const char *err) {
+    nk_layout_row_dynamic(ctx, 32, 2);
+    nk_label(ctx, etiqueta, NK_TEXT_LEFT);
+    nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD, buf, n, nk_filter_default);
+    if (err[0]) {
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_label_colored(ctx, err, NK_TEXT_LEFT, nk_rgb(230, 80, 80));
+    }
+}
+
+/* F04: formulario del vehículo. El texto escrito vive en k->form y no se toca al fallar. */
+static void pantalla_vehiculo(struct nk_context *ctx, Controlador *k, Menu *m) {
+    FormVehiculo *f = &k->form;
+    if (k->registrado) {
+        char r[512];
+        vehiculo_resumen(&k->guardado, r, sizeof r);
+        nk_layout_row_dynamic(ctx, 26, 1);
+        nk_label_colored(ctx, "Vehículo registrado:", NK_TEXT_LEFT, nk_rgb(90, 200, 120));
+        nk_label(ctx, r, NK_TEXT_LEFT);
+    }
+    campo_texto(ctx, "Marca", f->marca, sizeof f->marca, k->errores[VF_MARCA]);
+    campo_texto(ctx, "Modelo", f->modelo, sizeof f->modelo, k->errores[VF_MODELO]);
+    campo_texto(ctx, "Año", f->anio, sizeof f->anio, k->errores[VF_ANIO]);
+    campo_texto(ctx, "Cilindrada", f->cilindrada, sizeof f->cilindrada, k->errores[VF_CILINDRADA]);
+    nk_layout_row_dynamic(ctx, 32, 2);
+    nk_label(ctx, "Combustible", NK_TEXT_LEFT);
+    if (nk_combo_begin_label(ctx, f->combustible >= 0 ? VF_COMBUSTIBLE_ETIQUETA[f->combustible] : "Elige...",
+                             nk_vec2(nk_widget_width(ctx), 180))) {
+        nk_layout_row_dynamic(ctx, 28, 1);
+        for (int i = 0; i < VF_N_COMBUSTIBLES; i++)
+            if (nk_combo_item_label(ctx, VF_COMBUSTIBLE_ETIQUETA[i], NK_TEXT_LEFT)) f->combustible = i;
+        nk_combo_end(ctx);
+    }
+    if (k->errores[VF_COMBUSTIBLE][0]) {
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_label_colored(ctx, k->errores[VF_COMBUSTIBLE], NK_TEXT_LEFT, nk_rgb(230, 80, 80));
+    }
+    campo_texto(ctx, "Kilometraje", f->km, sizeof f->km, k->errores[VF_KM]);
+    if (k->error_form[0]) {
+        nk_layout_row_dynamic(ctx, 60, 1);
+        nk_label_colored_wrap(ctx, k->error_form, nk_rgb(230, 80, 80));
+    }
+    nk_layout_row_dynamic(ctx, 38, 1);
+    if (nk_button_label(ctx, k->registrado ? "Guardar cambios" : "Registrar vehículo")
+        && controlador_registrar_vehiculo(k))
+        m->vehiculo = 1;
+}
+
+/* Contenido provisional de las pantallas pendientes (F05-F10). Los botones "Simular"
  * solo encienden banderas para recorrer el flujo. */
-static void pantalla(struct nk_context *ctx, Menu *m) {
+static void pantalla(struct nk_context *ctx, Controlador *k, Menu *m) {
     nk_layout_row_dynamic(ctx, 30, 1);
     nk_label(ctx, menu_titulo(m->actual), NK_TEXT_LEFT);
+    if (m->actual == PANT_VEHICULO) {
+        pantalla_vehiculo(ctx, k, m);
+        return;
+    }
+    if (k->registrado && m->actual == PANT_DIAGNOSTICO) { /* resumen del vehículo (F04) */
+        char r[512];
+        vehiculo_resumen(&k->guardado, r, sizeof r);
+        nk_label_wrap(ctx, r);
+    }
     nk_label_wrap(ctx, "Pantalla pendiente de implementar.");
     nk_layout_row_dynamic(ctx, 34, 1);
     switch (m->actual) {
-    case PANT_VEHICULO:
-        if (!m->vehiculo && nk_button_label(ctx, "Simular vehículo registrado")) m->vehiculo = 1;
-        break;
     case PANT_SINTOMAS:
         if (!m->sintomas && nk_button_label(ctx, "Simular síntomas seleccionados")) m->sintomas = 1;
         break;
@@ -93,7 +148,7 @@ static int interfaz_marco(struct nk_context *ctx, Controlador *k, Menu *m, int w
     }
     if (nk_group_begin(ctx, "contenido", NK_WINDOW_BORDER)) {
         if (bloqueado) nk_widget_disable_begin(ctx);
-        pantalla(ctx, m);
+        pantalla(ctx, k, m);
         if (bloqueado) nk_widget_disable_end(ctx);
         nk_group_end(ctx);
     }

@@ -7,6 +7,7 @@
 :- use_module(library(http/json)).
 :- use_module(validacion).
 :- use_module(reglas).
+:- use_module(vehiculo).
 % La KB son hechos de `user`: se carga ahí, no dentro de este módulo.
 :- user:consult(hechos).
 
@@ -47,6 +48,8 @@ procesar_linea(Linea, Resp) :-
 
 operacion_conocida(ping).
 operacion_conocida(diagnosticar).
+operacion_conocida(registrar_vehiculo).
+operacion_conocida(consultar_vehiculo).
 
 % RNF-02: con la KB inválida toda operación conocida responde kb_invalida (se valida
 % en cada petición: la KB es chica y así también se detectan cambios en caliente).
@@ -84,6 +87,12 @@ ejecutar(diagnosticar, Args, Res) :-
     ;   \+ ( member(S-_, Entrada), sintoma(S, _, sintoma) ) -> Res = []
     ;   diagnosticar(Entrada, R), Res = [R]
     ).
+
+% registrar_vehiculo: args {marca, modelo, anio, cilindrada, combustible, kilometraje}; reemplaza el
+% registro anterior y devuelve el vehículo. Campos inválidos -> error entrada_invalida.
+ejecutar(registrar_vehiculo, Args, [V]) :- registrar_vehiculo(Args, V).
+% consultar_vehiculo: el vehículo registrado, o sin_resultados si no hay.
+ejecutar(consultar_vehiculo, _, Res) :- ( consultar_vehiculo(V) -> Res = [V] ; Res = [] ).
 
 % Pares Sintoma-Estado desde dos objetos JSON; lo mal formado queda como término que
 % validar_entrada rechaza (objeto con valores no-cadena, o args que no son objetos).
