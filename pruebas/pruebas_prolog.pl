@@ -1,6 +1,7 @@
 :- use_module(library(plunit)).
 :- use_module('../backend/servidor_json').
 :- use_module('../backend/validacion').
+:- ensure_loaded('../backend/hechos').
 
 :- begin_tests(contrato_base).
 test(ping) :-
@@ -21,7 +22,17 @@ test(args_invalidos) :-
     R.error.codigo == args_invalidos.
 :- end_tests(contrato_base).
 
-:- consult('../backend/hechos').
+% Daña la KB (quita/agrega hechos), corre Meta y la restaura.
+:- meta_predicate modificada(+, +, 0).
+modificada(Quitar, Agregar, Meta) :-
+    setup_call_cleanup(modificar(Quitar, Agregar, U), Meta, deshacer(U)).
+modificar(Quitar, Agregar, undo(Refs, Quitar)) :-
+    forall(member(H, Quitar), clause(user:H, true, _)),
+    forall(member(H, Quitar), (clause(user:H, true, R), erase(R))),
+    findall(R, (member(H, Agregar), assertz(user:H, R)), Refs).
+deshacer(undo(Refs, Quitados)) :-
+    forall(member(R, Refs), erase(R)),
+    forall(member(H, Quitados), assertz(user:H)).
 
 :- begin_tests(parametros).
 test(valores_del_issue, [forall(member(N-V, [tau_alto-0.85, tau_bajo-0.05,
@@ -171,15 +182,6 @@ test(frenos_se_relacionan_con_sus_sintomas,
 % ---------------------------------------------------------------------------
 :- begin_tests(validar_kb).
 
-modificada(Quitar, Agregar, Meta) :-
-    setup_call_cleanup(modificar(Quitar, Agregar, U), Meta, deshacer(U)).
-modificar(Quitar, Agregar, undo(Refs, Quitar)) :-
-    forall(member(H, Quitar), clause(user:H, true, _)),
-    forall(member(H, Quitar), (clause(user:H, true, R), erase(R))),
-    findall(R, (member(H, Agregar), assertz(user:H, R)), Refs).
-deshacer(undo(Refs, Quitados)) :-
-    forall(member(R, Refs), erase(R)),
-    forall(member(H, Quitados), assertz(user:H)).
 
 % Con Quitar/Agregar aplicados, validar_kb/1 debe reportar un problema que contenga Fragmento.
 reporta(Quitar, Agregar, Fragmento) :-
@@ -261,3 +263,56 @@ test(la_kb_queda_restaurada) :-
     ( modificada([], [componente(bateria, dup, 1, 1)], true) -> true ; true ),
     aggregate_all(count, componente(_,_,_,_), A).
 :- end_tests(validar_kb).
+
+% ---------------------------------------------------------------------------
+% RNF-02: una KB inválida no arranca en silencio (kb_invalida).
+% ---------------------------------------------------------------------------
+
+:- begin_tests(servidor_kb).
+% Sin notación R.campo dentro de metallamadas: se expandiría antes de ejecutarlas.
+ping(Id, R) :-
+    format(string(L), "{\"id\":~w,\"op\":\"ping\",\"args\":{}}", [Id]),
+    procesar_linea(L, R).
+estado(R, E) :- get_dict(estado, R, E).
+codigo(R, C) :- get_dict(error, R, Er), get_dict(codigo, Er, C).
+rota([accion_componente(fantasma, bateria, 0.5)]).
+
+test(servidor_carga_la_kb) :- sintoma(luz_abs_encendida, _, _).
+test(kb_valida_ping_ok) :- ping(1, R), estado(R, ok).
+test(kb_invalida_responde_error) :-
+    rota(H),
+    modificada([], H, ( ping(7, R), get_dict(id, R, 7), estado(R, error),
+                        codigo(R, kb_invalida), get_dict(resultados, R, []) )).
+test(kb_invalida_lista_los_problemas) :-
+    rota(H),
+    modificada([], H, ( ping(1, R), get_dict(error, R, Er),
+                        get_dict(problemas, Er, Ps), is_list(Ps), Ps \== [],
+                        member(P, Ps), sub_string(P, _, _, _, "fantasma"),
+                        get_dict(mensaje, Er, M), string(M) )).
+test(kb_invalida_serializa_a_json) :-
+    rota(H),
+    modificada([], H,
+        ( ping(1, R),
+          with_output_to(string(S), json_write_dict(current_output, R, [width(0)])),
+          sub_string(S, _, _, _, "\"kb_invalida\""), sub_string(S, _, _, _, "\"problemas\":"), sub_string(S, _, _, _, "fantasma"), ! )).
+test(kb_invalida_afecta_a_toda_operacion_conocida) :-
+    rota(H),
+    modificada([], H, ( ping(1, R1), codigo(R1, kb_invalida),
+                        procesar_linea("{\"id\":2,\"op\":\"ping\"}", R2),
+                        codigo(R2, kb_invalida) )).
+test(mensajes_mal_formados_conservan_su_error) :-
+    rota(H),
+    modificada([], H,
+        ( procesar_linea("{no es json", R1), codigo(R1, json_invalido),
+          procesar_linea("{\"id\":4,\"op\":\"xyz\"}", R2), codigo(R2, op_desconocida),
+          procesar_linea("{\"id\":5,\"op\":\"ping\",\"args\":[1]}", R3),
+          codigo(R3, args_invalidos) )).
+test(se_recupera_al_arreglar_la_kb) :-
+    rota(H),
+    modificada([], H, ( ping(1, R1), estado(R1, error) )),
+    ping(2, R2), estado(R2, ok).
+test(validar_en_cada_peticion_es_rapido) :-
+    statistics(cputime, T0),
+    forall(between(1, 20, I), ( ping(I, R), estado(R, ok) )),
+    statistics(cputime, T1), T1 - T0 < 5.
+:- end_tests(servidor_kb).
