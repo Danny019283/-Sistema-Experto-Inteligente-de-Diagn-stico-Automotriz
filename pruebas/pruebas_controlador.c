@@ -6,6 +6,8 @@
 #include <string.h>
 
 #include "controlador.h"
+#include "menu.h"
+#include "validaciones.h"
 
 static int fallos, total;
 
@@ -84,12 +86,44 @@ static void test_swipl_real(const char *valido, const char *rota) {
     controlador_cerrar(&k);
 }
 
+static void test_menu(void) {
+    Menu m;
+    menu_iniciar(&m);
+    CHECK(menu_habilitada(&m, PANT_VEHICULO) && menu_habilitada(&m, PANT_SINTOMAS));
+    CHECK(menu_habilitada(&m, PANT_SALIR));
+    CHECK(!menu_habilitada(&m, PANT_DIAGNOSTICO));       /* no se diagnostica sin síntomas */
+    CHECK(!menu_ir(&m, PANT_DIAGNOSTICO) && m.actual == PANT_VEHICULO);
+    CHECK(menu_ir(&m, PANT_SINTOMAS) && m.actual == PANT_SINTOMAS);
+    m.sintomas = 1;
+    CHECK(menu_ir(&m, PANT_DIAGNOSTICO));
+    for (Pantalla p = PANT_PRUEBAS; p < PANT_SALIR; p++) CHECK(!menu_habilitada(&m, p));
+    m.diagnostico = 1;
+    for (Pantalla p = PANT_VEHICULO; p < PANT_N; p++) CHECK(menu_habilitada(&m, p));
+    CHECK(!menu_ir(&m, PANT_SALIR) && m.actual == PANT_DIAGNOSTICO); /* Salir lo gestiona la interfaz */
+    CHECK(strcmp(menu_titulo(PANT_EXPLICACION), "Explicaci\xc3\xb3n") == 0);
+    CHECK(menu_titulo(PANT_N)[0] == '\0');
+}
+
+static void test_validaciones(void) {
+    long v = 0;
+    CHECK(validar_no_vacio("a") && !validar_no_vacio("") && !validar_no_vacio(" \t") && !validar_no_vacio(NULL));
+    CHECK(validar_entero("2015", 1900, 2100, &v) && v == 2015);
+    CHECK(validar_entero(" 7 ", 0, 10, &v) && v == 7);
+    CHECK(!validar_entero("", 0, 10, &v) && !validar_entero("abc", 0, 10, &v));
+    CHECK(!validar_entero("12x", 0, 100, &v) && !validar_entero("3.5", 0, 10, &v));
+    CHECK(!validar_entero("11", 0, 10, &v) && !validar_entero("-1", 0, 10, &v));
+    CHECK(!validar_entero("99999999999999999999", 0, 10, &v));
+    CHECK(validar_entero("5", 0, 10, NULL));
+}
+
 int main(int argc, char **argv) {
     test_ok();
     test_error_simple();
     test_kb_invalida();
     test_muchos_problemas();
     test_sin_error_object();
+    test_menu();
+    test_validaciones();
     if (argc == 3) test_swipl_real(argv[1], argv[2]);
     printf("pruebas_controlador: %d comprobaciones, %d fallos\n", total, fallos);
     return fallos ? 1 : 0;

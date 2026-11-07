@@ -1,4 +1,5 @@
 #include "interfaz.h"
+#include "menu.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -24,13 +25,107 @@
 #error "FUENTE_TTF la define el Makefile (DejaVu Sans)"
 #endif
 
+#define PING_CADA_MS 5000
+
+/* Una fila por línea del texto (nk_text_wrap ignora los '\n'). */
+static void lineas(struct nk_context *ctx, const char *txt, float alto) {
+    nk_layout_row_dynamic(ctx, alto, 1);
+    for (const char *p = txt; *p;) {
+        const char *nl = strchr(p, '\n');
+        int len = nl ? (int)(nl - p) : (int)strlen(p);
+        nk_text_wrap(ctx, p, len);
+        p += len + (nl ? 1 : 0);
+    }
+}
+
+/* Contenido provisional de cada pantalla hasta F04-F10. Los botones "Simular"
+ * solo encienden banderas para recorrer el flujo. */
+static void pantalla(struct nk_context *ctx, Menu *m) {
+    nk_layout_row_dynamic(ctx, 30, 1);
+    nk_label(ctx, menu_titulo(m->actual), NK_TEXT_LEFT);
+    nk_label_wrap(ctx, "Pantalla pendiente de implementar.");
+    nk_layout_row_dynamic(ctx, 34, 1);
+    switch (m->actual) {
+    case PANT_VEHICULO:
+        if (!m->vehiculo && nk_button_label(ctx, "Simular vehículo registrado")) m->vehiculo = 1;
+        break;
+    case PANT_SINTOMAS:
+        if (!m->sintomas && nk_button_label(ctx, "Simular síntomas seleccionados")) m->sintomas = 1;
+        break;
+    case PANT_DIAGNOSTICO:
+        if (!m->diagnostico && nk_button_label(ctx, "Simular diagnóstico calculado")) m->diagnostico = 1;
+        break;
+    default: break;
+    }
+}
+
+/* Devuelve 1 si el usuario pidió salir. */
+static int interfaz_marco(struct nk_context *ctx, Controlador *k, Menu *m, int w, int h) {
+    int salir = 0;
+    if (!nk_begin(ctx, "Sistema experto", nk_rect(0, 0, (float)w, (float)h), NK_WINDOW_NO_SCROLLBAR)) {
+        nk_end(ctx);
+        return 0;
+    }
+    int caido = k->hay_error || !conexion_viva(&k->con);
+    int bloqueado = caido; /* con el diálogo abierto, el resto no responde */
+
+    nk_layout_row_dynamic(ctx, 28, 1);
+    nk_labelf_colored(ctx, NK_TEXT_RIGHT, caido ? nk_rgb(230, 80, 80) : nk_rgb(90, 200, 120),
+                      "Prolog: %s", caido ? "sin conexión" : "conectado");
+
+    float alto = nk_window_get_content_region(ctx).h - 28 - 24;
+    nk_layout_row_template_begin(ctx, alto);
+    nk_layout_row_template_push_static(ctx, 190);
+    nk_layout_row_template_push_variable(ctx, 200);
+    nk_layout_row_template_end(ctx);
+
+    if (nk_group_begin(ctx, "nav", NK_WINDOW_BORDER)) {
+        nk_layout_row_dynamic(ctx, 38, 1);
+        for (Pantalla p = 0; p < PANT_N; p++) {
+            int on = menu_habilitada(m, p) && !bloqueado;
+            if (!on) nk_widget_disable_begin(ctx);
+            if (nk_button_label(ctx, menu_titulo(p)) && on) {
+                if (p == PANT_SALIR) salir = 1; else menu_ir(m, p);
+            }
+            if (!on) nk_widget_disable_end(ctx);
+        }
+        nk_group_end(ctx);
+    }
+    if (nk_group_begin(ctx, "contenido", NK_WINDOW_BORDER)) {
+        if (bloqueado) nk_widget_disable_begin(ctx);
+        pantalla(ctx, m);
+        if (bloqueado) nk_widget_disable_end(ctx);
+        nk_group_end(ctx);
+    }
+
+    if (caido) { /* RNF-02: Prolog no responde */
+        int n = 1;
+        for (const char *c = k->mensaje; *c; c++) n += *c == '\n';
+        float alto = 110 + 44.0f * n;
+        struct nk_rect r = nk_rect(w / 2.0f - 320, (h - alto) / 2, 640, alto);
+        if (nk_popup_begin(ctx, NK_POPUP_STATIC, "Error de conexión con Prolog",
+                           NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR, r)) {
+            lineas(ctx, k->mensaje, 44);
+            nk_layout_row_dynamic(ctx, 38, 2);
+            if (nk_button_label(ctx, "Reintentar")) {
+                controlador_cerrar(k);
+                controlador_probar_conexion(k);
+            }
+            if (nk_button_label(ctx, "Salir")) salir = 1;
+            nk_popup_end(ctx);
+        }
+    }
+    nk_end(ctx);
+    return salir;
+}
+
 int interfaz_ejecutar(Controlador *k) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         fprintf(stderr, "Error: no hay display disponible (%s)\n", SDL_GetError());
         return 1;
     }
     SDL_Window *win = SDL_CreateWindow("Sistema experto de diagnóstico automotriz",
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 720, 420, SDL_WINDOW_SHOWN);
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960, 600, SDL_WINDOW_SHOWN);
     SDL_Renderer *ren = win ? SDL_CreateRenderer(win, -1,
         SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC) : NULL;
     if (win && !ren) ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
@@ -51,6 +146,13 @@ int interfaz_ejecutar(Controlador *k) {
     nk_sdl_font_stash_end();
     if (fuente) nk_style_set_font(ctx, &fuente->handle);
 
+    Menu m;
+    menu_iniciar(&m);
+    controlador_probar_conexion(k);
+    /* shortcut: el ping es síncrono y bloquea hasta CONEXION_TIMEOUT_MS si swipl se cuelga;
+     * pasar a un hilo si molesta. */
+    Uint32 ultimo_ping = SDL_GetTicks();
+
     for (int salir = 0; !salir;) {
         SDL_Event e;
         nk_input_begin(ctx);
@@ -61,26 +163,14 @@ int interfaz_ejecutar(Controlador *k) {
         nk_sdl_handle_grab();
         nk_input_end(ctx);
 
+        if (!k->hay_error && SDL_GetTicks() - ultimo_ping >= PING_CADA_MS) {
+            controlador_probar_conexion(k);
+            ultimo_ping = SDL_GetTicks();
+        }
+
         int w, h;
         SDL_GetWindowSize(win, &w, &h);
-        if (nk_begin(ctx, "Conexión", nk_rect(0, 0, (float)w, (float)h), NK_WINDOW_BORDER)) {
-            nk_layout_row_dynamic(ctx, 30, 1);
-            nk_label(ctx, "Prueba de conexión C <-> SWI-Prolog", NK_TEXT_LEFT);
-            if (nk_button_label(ctx, "Probar conexión")) controlador_probar_conexion(k);
-            if (k->hay_error && nk_button_label(ctx, "Reintentar")) {
-                controlador_cerrar(k);
-                controlador_probar_conexion(k);
-            }
-            /* Una fila por línea del mensaje (nk_label_wrap ignora los '\n'). */
-            nk_layout_row_dynamic(ctx, 48, 1);
-            for (const char *p = k->mensaje; *p;) {
-                const char *nl = strchr(p, '\n');
-                int len = nl ? (int)(nl - p) : (int)strlen(p);
-                nk_text_wrap(ctx, p, len);
-                p += len + (nl ? 1 : 0);
-            }
-        }
-        nk_end(ctx);
+        if (interfaz_marco(ctx, k, &m, w, h)) salir = 1;
 
         SDL_SetRenderDrawColor(ren, 30, 30, 30, 255);
         SDL_RenderClear(ren);
