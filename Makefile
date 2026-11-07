@@ -3,7 +3,7 @@ BIN     := sistema_experto
 SRC     := $(wildcard frontend/*.c) $(wildcard integracion/*.c) integracion/vendor/cJSON.c
 OBJ     := $(SRC:.c=.o)
 FUENTE  := $(shell fc-list 2>/dev/null | cut -d: -f1 | grep -m1 'DejaVuSans\.ttf$$')
-CFLAGS  := -std=gnu11 -O2 -Wall -Wextra -Ifrontend -Ifrontend/vendor -Iintegracion \
+CFLAGS  := -std=gnu11 -O2 -Wall -Wextra -MMD -MP -Ifrontend -Ifrontend/vendor -Iintegracion \
            -Iintegracion/vendor -DFUENTE_TTF='"$(FUENTE)"' $(shell pkg-config --cflags sdl2 2>/dev/null)
 LDLIBS  := $(shell pkg-config --libs sdl2 2>/dev/null) -lm
 
@@ -12,6 +12,8 @@ TEST_C  := pruebas/pruebas_controlador
 .PHONY: build run test clean deps
 
 build: deps $(BIN)
+
+-include $(OBJ:.o=.d)
 
 $(BIN): $(OBJ)
 	$(CC) -o $@ $^ $(LDLIBS)
@@ -26,11 +28,11 @@ test:
 	@command -v swipl >/dev/null || { echo "Falta swipl (SWI-Prolog)."; exit 1; }
 	swipl -q -g run_tests -t halt pruebas/pruebas_prolog.pl
 	$(CC) -std=gnu11 -Wall -Wextra -w -Ifrontend -Iintegracion -Iintegracion/vendor -o $(TEST_C) \
-	    $(TEST_C).c frontend/controlador.c frontend/menu.c frontend/validaciones.c integracion/conexion.c integracion/vendor/cJSON.c -lm
+	    $(TEST_C).c frontend/controlador.c frontend/menu.c frontend/validaciones.c frontend/vehiculo.c integracion/conexion.c integracion/vendor/cJSON.c -lm
 	./$(TEST_C) backend/servidor_json.pl pruebas/servidor_kb_rota.pl 2>/dev/null
 
 clean:
-	rm -f $(BIN) $(OBJ) $(TEST_C)
+	rm -f $(BIN) $(OBJ) $(OBJ:.o=.d) $(TEST_C)
 
 deps:
 	@command -v gcc >/dev/null || { echo "Falta gcc."; exit 1; }

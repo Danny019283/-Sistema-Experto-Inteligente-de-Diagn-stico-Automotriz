@@ -3,11 +3,15 @@
  * Los dos scripts los prepara `make test`. */
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <string.h>
+#include <sys/wait.h>
 
 #include "controlador.h"
 #include "menu.h"
 #include "validaciones.h"
+#include "vehiculo.h"
+#include <time.h>
 
 static int fallos, total;
 
@@ -116,6 +120,119 @@ static void test_validaciones(void) {
     CHECK(validar_entero("5", 0, 10, NULL));
 }
 
+static FormVehiculo form_valido(void) {
+    FormVehiculo f;
+    vehiculo_form_iniciar(&f);
+    strcpy(f.marca, "Toyota"); strcpy(f.modelo, "Corolla"); strcpy(f.motor, "1.8 L");
+    strcpy(f.anio, "2015"); strcpy(f.km, "120000"); f.combustible = 0;
+    return f;
+}
+
+static void test_validar_texto(void) {
+    CHECK(validar_texto("Ford", 40) && validar_texto("  Ford \t", 40));
+    CHECK(!validar_texto("", 40) && !validar_texto("   ", 40));
+    CHECK(!validar_texto("Fo\x07rd", 40) && !validar_texto("a\nb", 40));
+    char largo[64];
+    memset(largo, 'a', 41); largo[41] = 0;
+    CHECK(!validar_texto(largo, 40));
+    largo[40] = 0;
+    CHECK(validar_texto(largo, 40));
+    CHECK(validar_texto("\xc3\xb1\xc3\xb1\xc3\xb1", 3) && !validar_texto("\xc3\xb1\xc3\xb1\xc3\xb1", 2)); /* ñññ: 3 caracteres, 6 bytes */
+}
+
+static void test_vehiculo_validar(void) {
+    char err[VF_N][VF_ERR];
+    FormVehiculo f = form_valido();
+    CHECK(vehiculo_validar(&f, err) == 0);
+    time_t t = time(NULL);
+    int max = localtime(&t)->tm_year + 1900 + 1;
+    char txt[16];
+    snprintf(txt, sizeof txt, "%d", max); strcpy(f.anio, txt);
+    CHECK(vehiculo_validar(&f, err) == 0);
+    snprintf(txt, sizeof txt, "%d", max + 1); strcpy(f.anio, txt);
+    CHECK(vehiculo_validar(&f, err) == 1 && err[VF_ANIO][0]);
+    strcpy(f.anio, "1950"); CHECK(vehiculo_validar(&f, err) == 0);
+    strcpy(f.anio, "1949"); CHECK(vehiculo_validar(&f, err) == 1);
+    strcpy(f.anio, "20x5"); CHECK(vehiculo_validar(&f, err) == 1);
+    strcpy(f.anio, "2015");
+    strcpy(f.km, "-1"); CHECK(vehiculo_validar(&f, err) == 1 && err[VF_KM][0]);
+    strcpy(f.km, "1.5"); CHECK(vehiculo_validar(&f, err) == 1);
+    strcpy(f.km, "0"); CHECK(vehiculo_validar(&f, err) == 0);
+    strcpy(f.km, "3000001"); CHECK(vehiculo_validar(&f, err) == 1);
+    strcpy(f.km, "1");
+    f.combustible = -1; CHECK(vehiculo_validar(&f, err) == 1 && err[VF_COMBUSTIBLE][0]);
+    f.combustible = 0;
+    f.marca[0] = 0; CHECK(vehiculo_validar(&f, err) == 1 && err[VF_MARCA][0] && !err[VF_MODELO][0]);
+    strcpy(f.marca, "Ford"); strcpy(f.modelo, "  "); strcpy(f.motor, "x\x01");
+    CHECK(vehiculo_validar(&f, err) == 2 && err[VF_MODELO][0] && err[VF_MOTOR][0]); /* uno por campo, todos a la vez */
+    FormVehiculo v; vehiculo_form_iniciar(&v);
+    CHECK(vehiculo_validar(&v, err) == VF_N);
+}
+
+static void test_vehiculo_json(void) {
+    FormVehiculo f = form_valido(), g;
+    cJSON *j = vehiculo_a_json(&f);
+    CHECK(strcmp(cJSON_GetObjectItem(j, "marca")->valuestring, "Toyota") == 0);
+    CHECK(cJSON_GetObjectItem(j, "anio")->valuedouble == 2015);
+    CHECK(strcmp(cJSON_GetObjectItem(j, "combustible")->valuestring, "gasolina") == 0);
+    CHECK(vehiculo_desde_json(&g, j) && strcmp(g.modelo, "Corolla") == 0 && strcmp(g.km, "120000") == 0
+          && g.combustible == 0);
+    cJSON_Delete(j);
+    char r[160];
+    vehiculo_resumen(&f, r, sizeof r);
+    CHECK(strcmp(r, "Toyota Corolla 2015 \xc2\xb7 1.8 L \xc2\xb7 Gasolina \xc2\xb7 120000 km") == 0);
+    cJSON *mal = cJSON_Parse("{\"marca\":\"x\"}");
+    CHECK(!vehiculo_desde_json(&g, mal));
+    cJSON_Delete(mal);
+    /* los problemas de Prolog se reparten por campo; los desconocidos se ignoran */
+    cJSON *e = cJSON_Parse("{\"estado\":\"error\",\"error\":{\"codigo\":\"entrada_invalida\",\"problemas\":"
+        "[\"anio: debe estar entre 1950 y 2027\",\"motor: no puede estar vac\xc3\xado\",\"otro: x\"]}}");
+    char err[VF_N][VF_ERR];
+    CHECK(vehiculo_errores_prolog(e, err) == 2);
+    CHECK(strstr(err[VF_ANIO], "1950") && strstr(err[VF_MOTOR], "motor") && !err[VF_MARCA][0]);
+    cJSON_Delete(e);
+}
+
+static void test_registrar_real(const char *valido, const char *rota) {
+    Controlador k;
+    controlador_iniciar(&k, valido);
+    controlador_probar_conexion(&k);
+    k.form = form_valido();
+    strcpy(k.form.marca, "  Toyota  ");
+    CHECK(controlador_registrar_vehiculo(&k) == 1 && k.registrado);
+    CHECK(strcmp(k.guardado.marca, "Toyota") == 0 && strcmp(k.form.marca, "Toyota") == 0); /* lo que devolvió Prolog */
+    /* editar reemplaza el registro */
+    strcpy(k.form.km, "130000");
+    CHECK(controlador_registrar_vehiculo(&k) == 1 && strcmp(k.guardado.km, "130000") == 0);
+    cJSON *r = conexion_peticion(&k.con, "consultar_vehiculo", NULL, NULL, 0);
+    FormVehiculo v;
+    CHECK(r && vehiculo_desde_json(&v, cJSON_GetArrayItem(cJSON_GetObjectItem(r, "resultados"), 0))
+          && strcmp(v.km, "130000") == 0);
+    cJSON_Delete(r);
+    /* dato inválido: no se envía, no se pierde lo escrito, Prolog conserva el anterior */
+    strcpy(k.form.anio, "1800");
+    CHECK(controlador_registrar_vehiculo(&k) == 0 && k.errores[VF_ANIO][0] && strcmp(k.form.marca, "Toyota") == 0);
+    CHECK(strcmp(k.guardado.anio, "2015") == 0 && !k.hay_error);
+    /* si swipl muere y se reabre, el vehículo se vuelve a registrar */
+    kill(k.con.pid, SIGKILL);
+    waitpid(k.con.pid, NULL, 0);
+    controlador_probar_conexion(&k);  /* detecta la caída */
+    controlador_probar_conexion(&k);  /* reabre */
+    r = conexion_peticion(&k.con, "consultar_vehiculo", NULL, NULL, 0);
+    CHECK(r && cJSON_GetArraySize(cJSON_GetObjectItem(r, "resultados")) == 1);
+    cJSON_Delete(r);
+    controlador_cerrar(&k);
+
+    /* error de Prolog que no es de un campo (KB rota): se muestra sin marcar conexión caída */
+    controlador_iniciar(&k, rota);
+    k.form = form_valido();
+    char err[256];
+    conexion_abrir(&k.con, rota, err, sizeof err);
+    CHECK(controlador_registrar_vehiculo(&k) == 0 && !k.registrado && !k.hay_error);
+    CHECK(strstr(k.error_form, "kb_invalida") != NULL && strcmp(k.form.marca, "Toyota") == 0);
+    controlador_cerrar(&k);
+}
+
 int main(int argc, char **argv) {
     test_ok();
     test_error_simple();
@@ -124,7 +241,10 @@ int main(int argc, char **argv) {
     test_sin_error_object();
     test_menu();
     test_validaciones();
-    if (argc == 3) test_swipl_real(argv[1], argv[2]);
+    test_validar_texto();
+    test_vehiculo_validar();
+    test_vehiculo_json();
+    if (argc == 3) { test_swipl_real(argv[1], argv[2]); test_registrar_real(argv[1], argv[2]); }
     printf("pruebas_controlador: %d comprobaciones, %d fallos\n", total, fallos);
     return fallos ? 1 : 0;
 }
