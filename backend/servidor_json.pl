@@ -1,9 +1,13 @@
 % Servidor JSON: una línea JSON por stdin -> una línea JSON por stdout.
 % Petición:  {"id": N, "op": "...", "args": {...}}
 % Respuesta: {"id": N, "estado": "ok|sin_resultados|error", "resultados": [...],
-%             "error": {"codigo": "...", "mensaje": "..."}}   (error solo si estado=error)
+%             "error": {"codigo": "...", "mensaje": "..."}}   (error solo si estado=error;
+%             kb_invalida añade "problemas": [cadenas])
 :- module(servidor_json, [main/0, procesar_linea/2]).
 :- use_module(library(http/json)).
+:- use_module(validacion).
+% La KB son hechos de `user`: se carga ahí, no dentro de este módulo.
+:- user:consult(hechos).
 
 % Arranque: swipl -q -g main -t halt backend/servidor_json.pl (lo lanza conexion.c).
 % No usa initialization(main, main): se dispararía también al cargarlo desde los tests.
@@ -42,13 +46,22 @@ procesar_linea(Linea, Resp) :-
 
 operacion_conocida(ping).
 
+% RNF-02: con la KB inválida toda operación conocida responde kb_invalida (se valida
+% en cada petición: la KB es chica y así también se detectan cambios en caliente).
 despachar(Id, Op, Args, Resp) :-
-    catch(ejecutar(Op, Args, Res), E, true),
-    (   var(E)
-    ->  estado_resultados(Res, Estado),
-        Resp = _{id: Id, estado: Estado, resultados: Res}
-    ;   message_to_string(E, M),
-        error(Id, excepcion_prolog, M, Resp)
+    validar_kb(Problemas),
+    (   Problemas \== []
+    ->  Resp = _{id: Id, estado: error, resultados: [],
+                 error: _{codigo: kb_invalida,
+                          mensaje: "la base de conocimiento es inválida",
+                          problemas: Problemas}}
+    ;   catch(ejecutar(Op, Args, Res), E, true),
+        (   var(E)
+        ->  estado_resultados(Res, Estado),
+            Resp = _{id: Id, estado: Estado, resultados: Res}
+        ;   message_to_string(E, M),
+            error(Id, excepcion_prolog, M, Resp)
+        )
     ).
 
 estado_resultados([], sin_resultados) :- !.
