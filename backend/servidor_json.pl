@@ -9,6 +9,7 @@
 :- use_module(reglas).
 :- use_module(vehiculo).
 :- use_module(historial).
+:- use_module(explicaciones).
 % La KB son hechos de `user`: se carga ahí, no dentro de este módulo.
 :- user:consult(hechos).
 
@@ -55,6 +56,7 @@ operacion_conocida(consultar_vehiculo).
 operacion_conocida(guardar_diagnostico).
 operacion_conocida(listar_diagnosticos).
 operacion_conocida(cargar_diagnostico).
+operacion_conocida(explicar).
 
 % RNF-02: con la KB inválida toda operación conocida responde kb_invalida (se valida
 % en cada petición: la KB es chica y así también se detectan cambios en caliente).
@@ -116,6 +118,19 @@ ejecutar(cargar_diagnostico, Args, [D]) :-
     ;   throw(entrada_invalida(["id: debe ser un número entero"]))
     ),
     cargar_diagnostico(Id, D).
+
+% F08 (backend/explicaciones.pl). explicar: sin args explica el último `diagnosticar`; con
+% {"id": N}, un diagnóstico guardado. Devuelve conclusion, traza, explicacion, acciones y pruebas.
+% Errores: sin_diagnostico (no hay ninguno calculado), no_encontrado, entrada_invalida (id).
+ejecutar(explicar, Args, [X]) :-
+    (   get_dict(id, Args, Id)
+    ->  (   integer(Id) -> true ; throw(entrada_invalida(["id: debe ser un número entero"])) ),
+        cargar_diagnostico(Id, D),                                   % no_encontrado si no existe
+        diagnostico_resultado(Id, entrada, Entrada), Res = D.resultado
+    ;   diagnostico_actual(Entrada, Res) -> true
+    ;   throw(historial_error(sin_diagnostico, "Primero genere un diagnóstico"))
+    ),
+    explicar(Entrada, Res, X).
 
 % registrar_vehiculo: args {marca, modelo, anio, cilindrada, combustible, kilometraje}; reemplaza el
 % registro anterior y devuelve el vehículo. Campos inválidos -> error entrada_invalida.
