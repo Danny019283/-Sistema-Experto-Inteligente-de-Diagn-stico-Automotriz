@@ -1,0 +1,203 @@
+LANG=C.UTF-8 swipl -q -g run_tests -t halt pruebas/pruebas_prolog.pl
+......
+..........
+.........
+...............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+..........
+..KB inválida: sintoma: id duplicado luz_abs_encendida
+.................................
+.........
+...
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:354:
+	PL-Unit: Test @(lr_ruido_y_pedal,[discos_freno,chirrido_frenos,1.97]): Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:354:
+	PL-Unit: Test @(lr_ruido_y_pedal,[pastillas_freno,chirrido_frenos,3.7]): Test succeeded with choicepoint
+...
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:354:
+	PL-Unit: Test @(lr_ruido_y_pedal,[liquido_frenos,pedal_freno_esponjoso,9.0]): Test succeeded with choicepoint
+.....
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:389:
+	PL-Unit: Test @(estado_inicial_63_44_31,[pastillas_freno,0.63]): Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:389:
+	PL-Unit: Test @(estado_inicial_63_44_31,[liquido_frenos,0.44]): Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:389:
+	PL-Unit: Test @(estado_inicial_63_44_31,[discos_freno,0.31]): Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:393:
+	PL-Unit: Test verosimilitud_laplace: Test succeeded with choicepoint
+.
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:401:
+	PL-Unit: Test iteracion_1_pastillas_refutada: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:405:
+	PL-Unit: Test iteracion_2_liquido_confirmado: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:409:
+	PL-Unit: Test iteracion_3_discos_descartado: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:413:
+	PL-Unit: Test desconocido_no_entra: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:416:
+	PL-Unit: Test ausente_excluye: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:419:
+	PL-Unit: Test sintoma_sin_fila_no_aporta: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:422:
+	PL-Unit: Test contribuciones_explican_el_logit: Test succeeded with choicepoint
+.
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:429:
+	PL-Unit: Test cambiar_un_conteo_cambia_el_resultado: Test succeeded with choicepoint
+.....
+..........
+................
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:546:
+	PL-Unit: Test traza_del_pdf_concluyente_en_3_de_5: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:548:
+	PL-Unit: Test traza_del_pdf_probabilidades_y_estados: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:553:
+	PL-Unit: Test traza_del_pdf_eventos_y_retrocesos: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:558:
+	PL-Unit: Test traza_del_pdf_accion_88: Test succeeded with choicepoint
+.
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:566:
+	PL-Unit: Test traza_del_pdf_pruebas_hechas_y_nada_sugerido: Test succeeded with choicepoint
+.
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:575:
+	PL-Unit: Test se_detiene_en_la_prueba_pendiente: Test succeeded with choicepoint
+.
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:582:
+	PL-Unit: Test max_iteraciones_es_no_concluyente_no_error: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:585:
+	PL-Unit: Test foco_sin_pruebas_pasa_al_siguiente_y_no_concluye: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:589:
+	PL-Unit: Test foco_sin_pruebas_queda_en_la_traza: Test succeeded with choicepoint
+...
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:607:
+	PL-Unit: Test cambiar_un_conteo_cambia_el_diagnostico: Test succeeded with choicepoint
+.............
+...............
+..........
+.............................
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:836:
+	PL-Unit: Test caso_r1_pdf_seccion6: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:850:
+	PL-Unit: Test caso_r2_ejemplo_arranque: Test succeeded with choicepoint
+......
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:911:
+	PL-Unit: Test catalogo_agrupado_por_sistema_y_solo_sintomas: Test succeeded with choicepoint
+....
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:938:
+	PL-Unit: Test rnf01_id_inexistente_no_altera_la_seleccion: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:943:
+	PL-Unit: Test rnf01_un_hallazgo_no_se_marca_como_sintoma: Test succeeded with choicepoint
+Warning: /home/claude/merge/pruebas/pruebas_prolog.pl:946:
+	PL-Unit: Test rnf01_estado_invalido_lo_valida_prolog: Test succeeded with choicepoint
+.......
+..........
+cc -std=gnu11 -Wall -Wextra -w -Ifrontend -Iintegracion -Iintegracion/vendor -o pruebas/pruebas_controlador pruebas/pruebas_controlador.c frontend/controlador.c frontend/menu.c frontend/validaciones.c frontend/vehiculo.c frontend/sintomas.c frontend/diagnostico.c integracion/conexion.c integracion/vendor/cJSON.c -lm
+./pruebas/pruebas_controlador backend/servidor_json.pl pruebas/servidor_kb_rota.pl 2>/dev/null
+pruebas_controlador: 87 comprobaciones, 0 fallos
+cc -std=gnu11 -Wall -Wextra -w -Ifrontend -Iintegracion -Iintegracion/vendor -o pruebas/pruebas_c pruebas/pruebas_c.c frontend/sintomas.c frontend/diagnostico.c integracion/vendor/cJSON.c -lm
+./pruebas/pruebas_c
+diagnostico_parsear (F06, RNF-01: validar antes de dibujar)
+  [ok]    respuesta válida se acepta
+  [ok]    se ordena por P descendente
+  [ok]    iteraciones, concluyente y sistema
+  [ok]    probabilidad > 1 se rechaza
+  [ok]    probabilidad < 0 se rechaza
+  [ok]    probabilidad no numérica se rechaza
+  [ok]    estado desconocido se rechaza
+  [ok]    iteraciones > max se rechaza
+  [ok]    'concluyente' no booleano se rechaza
+  [ok]    falta 'motivo'
+  [ok]    falta la lista 'componentes'
+  [ok]    estructura inesperada se rechaza
+  [ok]    campo obligatorio ausente se rechaza (sistema)
+  [ok]    sin componentes es válido (se muestra «sin hipótesis»)
+  [ok]    tras un rechazo queda intacto el diagnóstico previo
+  [ok]    prueba sugerida opcional
+  [ok]    par de la contradicción
+  [ok]    texto del motivo
+catalogo_parsear / seleccion (F05)
+  [ok]    catálogo válido
+  [ok]    catálogo sin nombre se rechaza y no pisa el anterior
+  [ok]    catálogo que no es lista se rechaza
+  [ok]    catalogo_contiene
+  [ok]    RNF-01: sin síntomas no se diagnostica
+  [ok]    solo 'desconocido' tampoco basta
+  [ok]    un presente es suficiente
+  [ok]    RNF-01: id fuera del catálogo no se envía
+  [ok]    desconocido no entra a los args del cálculo (mapa id: estado)
+  [ok]    fijar_seleccion lleva toda la selección
+  [ok]    selección válida
+  [ok]    selección con estado inválido se rechaza y no pisa la anterior
+  [ok]    estados válidos: presente/ausente/desconocido
+
+pruebas_c: 31 verificaciones, 0 fallos
+cc -std=gnu11 -Wall -Wextra -w -Ifrontend -Iintegracion -Iintegracion/vendor -o pruebas/pruebas_integracion pruebas/pruebas_integracion.c frontend/controlador.c frontend/menu.c frontend/validaciones.c frontend/vehiculo.c frontend/sintomas.c frontend/diagnostico.c integracion/conexion.c integracion/vendor/cJSON.c -lm
+LANG=C.UTF-8 ./pruebas/pruebas_integracion
+I1 · catalogo_sintomas con swipl real y la KB real
+    [ok]    el catálogo se pide a Prolog y se carga
+    [ok]    50 síntomas (los hallazgos hall_* no entran al catálogo)
+    [ok]    ningún hallazgo en el catálogo
+    [ok]    agrupado y ordenado por sistema
+    [ok]    chirrido_frenos aparece en el sistema Frenos
+I2 · marcar_sintoma / quitar_sintoma / limpiar_sintomas / fijar_seleccion
+    [ok]    3 marcados, 2 entran al cálculo
+    [ok]    el estado vuelve de Prolog
+    [ok]    quitar elimina de la selección
+    [ok]    limpiar vacía y deshabilita el diagnóstico
+    [ok]    fijar_seleccion acepta una selección válida
+I3 · diagnosticar (escenario PDF §6) y su validación en C
+    [ok]    con síntomas presentes se habilita Diagnosticar
+    [ok]    Pastillas, Líquido y Discos (y las demás hipótesis)
+    [ok]    Pastillas ≈63 %
+    [ok]    Líquido ≈44 %
+    [ok]    Discos ≈31 %
+    [ok]    cada componente trae su sistema
+    [ok]    no concluyente, 0 de 5 iteraciones, prueba pendiente
+    [ok]    propone la prueba que falta
+I4 · RB1 y RB3 (escenarios 1 y 2 de F11) vía diagnosticar con hallazgos
+    [ok]    tras la primera prueba: 1 iteración
+    [ok]    RB1: Pastillas refutada con espesor normal
+    [ok]    y se pasa al siguiente candidato (Líquido)
+    [ok]    RB3: Líquido confirmado, el motor vuelve al punto #1
+    [ok]    Discos descartado: concluyente en 3 de 5
+    [ok]    Pastillas y Discos descartadas
+    [ok]    hallazgos mal formados no se aceptan
+I5 · RB2: contradicción, restauración del snapshot y elección del usuario
+    [ok]    R2b detecta el par y se abre el diálogo
+    [ok]    el mensaje nombra los dos síntomas
+    [ok]    X restaurada al snapshot anterior (solo «no arranca»)
+    [ok]    diagnosticar queda bloqueado hasta resolver
+    [ok]    elegir un síntoma ajeno al conflicto se rechaza
+    [ok]    la elección vuelve a R2: queda «ralentí inestable»
+    [ok]    otro choque abre el diálogo de nuevo
+    [ok]    cancelar conserva el estado anterior sin cerrar la aplicación
+N1 · RNF-01: entradas inválidas se rechazan ANTES de llegar a Prolog
+    [ok]    id fuera del catálogo: mensaje esperado y sin tocar swipl
+    [ok]    estado inválido se rechaza en C
+    [ok]    diagnosticar sin síntomas: mensaje esperado, motor no invocado
+    [ok]    ninguna de las tres entradas llegó al motor
+    [ok]    Prolog rechaza un estado inválido (entrada_invalida)
+    [ok]    la selección previa no se altera
+N2 · JSON malformado: json_invalido y el servidor sigue vivo
+    [ok]    código json_invalido en el contrato
+    [ok]    el servidor sigue atendiendo (ping ok)
+N3 · swipl caído: error controlado, sin cierre, y se recupera con la selección
+    [ok]    error de conexión (la interfaz abre su diálogo)
+    [ok]    la selección previa y el catálogo no se alteran
+    [ok]    con el sistema caído el diagnóstico no se dibuja, avisa y no reabre swipl por su cuenta
+    [ok]    Reintentar reabre swipl
+    [ok]    la selección anterior se reenvió al proceso nuevo
+    [ok]    y el diagnóstico funciona con el proceso nuevo
+N4 · KB inválida: kb_invalida, catálogo deshabilitado, aplicación en pie
+    [ok]    la interfaz recibe el código kb_invalida
+    [ok]    el catálogo queda deshabilitado
+    [ok]    pedir el catálogo con KB rota conserva el error kb_invalida
+    [ok]    diagnosticar queda bloqueado con mensaje en pantalla
+    [ok]    swipl sigue vivo: no hubo cierre ni bloqueo
+N5 · sin hipótesis: mensaje y sugerencia, sin cerrar
+    [ok]    el síntoma sin componentes está en el catálogo
+    [ok]    mensaje «No hay hipótesis con los síntomas ingresados»
+    [ok]    sugiere agregar síntomas y no es un error
+    [ok]    sin síntomas el contrato responde sin_resultados
+    [ok]    al agregar un síntoma útil el diagnóstico se recupera
+
+pruebas_integracion: 57 verificaciones, 0 fallos

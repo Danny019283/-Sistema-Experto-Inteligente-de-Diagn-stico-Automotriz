@@ -1,0 +1,58 @@
+CASOS DE PRUEBA · Sistema experto de diagnóstico automotriz (alternativa A) · F12
+================================================================================
+Total: 15 casos (5 razonamiento, 5 integración JSON, 5 RNF). Todos PASAN en `make test`.
+Todos corren sobre la KB real (backend/hechos.pl, 80 componentes) y el motor real (F02).
+
+Cómo reproducir
+  make test        -> plunit (245 pruebas) + controlador (87) + validadores C (31) + integración y RNF (57)
+  make capturas    -> regenera las capturas de pantalla (necesita display; xvfb-run si no hay uno)
+  make calibrar    -> ventana válida de tau_alto / tau_bajo
+
+Columnas: id | objetivo | entrada | expectativa | resultado obtenido | evidencia | estado
+(Prueba = test de plunit en pruebas/pruebas_prolog.pl, o función en pruebas/pruebas_integracion.c.
+ Salida completa de la última ejecución: pruebas/evidencia/salida_make_test.txt)
+
+--------------------------------------------------------------------------------
+A. RAZONAMIENTO (plunit, pruebas/pruebas_prolog.pl, unidad `f12_razonamiento`)
+--------------------------------------------------------------------------------
+R1 | Escenario del PDF §6: hipótesis alternativas (RF-07, F06) | marcar chirrido_frenos=presente, pedal_freno_esponjoso=presente; diagnosticar | Pastillas ≈63 %, Líquido ≈44 %, Discos ≈31 %, los 3 inciertos y ordenados por P; no concluyente (prueba pendiente), 0 de 5 iteraciones; cada componente con su sistema | Pastillas 63,3 %; Líquido 44,2 %; Discos 30,6 % (todos incierto; siguen Zapatas/Servofreno/Manguera/Cilindro maestro al 14,6 %); concluyente=false; motivo=prueba_pendiente; iteraciones 0/5; sistema «Frenos» | test caso_r1_pdf_seccion6; captura f06_diagnostico_no_concluyente.png | PASA
+R2 | Ejemplo de entrada del enunciado: relé, solenoide o circuito de control | marcar no_arranca=presente, motor_no_gira=presente, faros_tenues=ausente (+ hallazgo hall_medir_voltaje_bateria=normal); diagnosticar | Relé y circuito de control confirmados, solenoide como hipótesis (no descartado), todos del sistema Arranque; el ciclo pide primero la prueba del solenoide | Relé 85,4 % y Circuito de control 85,4 % (confirmado); Solenoide 33,3 % (incierto); prueba sugerida del solenoide; el voltaje queda en hallazgos_no_aplicados (se aplica cuando se pide esa prueba) | test caso_r2_ejemplo_arranque | PASA
+R3 | Backtracking RB1 y RB3 (escenarios 1 y 2 de F11) con el PDF §6 | R1 + hallazgos acumulados: (a) espesor_pastillas normal; (b) + nivel_liquido severo; (c) + alabeo_disco normal | (a) RB1: Pastillas refutada (3,9 %), hallazgo conservado, pasa a Líquido. (b) RB3: Líquido confirmado (93 %), el motor vuelve al punto #1 y evalúa Discos. (c) Discos descartado; concluyente en 3 de 5; traza apilar, prueba, rb1, prueba, rb3, prueba, rb1 | (a) iteraciones 1, traza [apilar,prueba,rb1], sugerida: componente Líquido, pruebas_hechas conserva el espesor. (b) iteraciones 2, Líquido 93,1 % confirmado, sugerida: Discos. (c) concluyente=true, motivo sin_inciertos, 3/5, Discos 2,5 % y Pastillas 3,9 % descartados | tests caso_r3_rb1_refutacion_conserva_el_hallazgo, caso_r3_rb3_vuelve_al_punto_y_evalua_discos, caso_r3_final_concluyente_en_3_de_5; captura f06_diagnostico_concluyente.png | PASA
+R4 | Backtracking RB2 (escenario 3 de F11): contradicción | marcar no_arranca=presente; marcar ralenti_inestable=presente; resolver_contradiccion elegido=ralenti_inestable. Además diagnosticar con ambos | R2b detecta el par incompatible; X se restaura al snapshot anterior (solo «no arranca»); se informa el par; al elegir «ralentí inestable» queda solo ese y se vuelve a R2. diagnosticar con el par devuelve motivo contradiccion y rb2 en la traza | contradiccion con par [no_arranca, ralenti_inestable] y restaurado=true; selección tras el choque = [no_arranca]; tras resolver = [ralenti_inestable]; diagnosticar: motivo=contradiccion, traza=[rb2 (no_arranca, ralenti_inestable)] | tests caso_r4_rb2_restaura_y_el_usuario_elige y caso_r4_rb2_tambien_en_la_traza_de_diagnosticar; captura f11_dialogo_rb2.png | PASA
+R5 | Resultado NO concluyente | parametro max_iteraciones=2; R1 + los 3 hallazgos; diagnosticar | El ciclo se corta por límite de iteraciones y sigue siendo una respuesta ok (no un error) | concluyente=false; motivo=max_iteraciones; iteraciones 2/2 | test caso_r5_no_concluyente_por_max_iteraciones | PASA
+
+--------------------------------------------------------------------------------
+B. INTEGRACIÓN JSON (C <-> swipl real, pruebas/pruebas_integracion.c)
+--------------------------------------------------------------------------------
+I1 | Operación catalogo_sintomas (F05) | petición real {op:catalogo_sintomas} lanzando swipl | Catálogo tomado de la KB, agrupado por sistema, solo tipo síntoma (sin hallazgos hall_*) | 50 síntomas, 0 hallazgos; primer sistema «Admisión y escape»; chirrido_frenos en «Frenos» | i1_catalogo (5 verificaciones); plunit el_catalogo_coincide_con_la_kb y sintoma_nuevo_en_la_kb_aparece_sin_tocar_c | PASA
+I2 | Operaciones marcar_sintoma, quitar_sintoma, limpiar_sintomas, fijar_seleccion (F05) | marcar chirrido=presente, pedal=ausente, luz_check_engine=desconocido; quitar; limpiar; fijar | La selección que devuelve Prolog es la del panel; desconocido no entra al cálculo; limpiar deshabilita Diagnosticar | 3 marcados / 2 al cálculo; quitar → 2; limpiar → 0 y diagnóstico deshabilitado; fijar_seleccion ok | i2_seleccion; captura f05_seleccion_estados.png | PASA
+I3 | Operación diagnosticar (F06) y validación de la respuesta en C | marcar chirrido y pedal presentes; Diagnosticar | Tabla ordenada por P con sistema; no concluyente 0/5; motivo y prueba sugerida | Pastillas 63 %, Líquido 44 %, Discos 31 % con sistema «Frenos»; concluyente=false, 0/5, prueba_pendiente, prueba sugerida presente | i3_diagnosticar; captura f06_diagnostico_no_concluyente.png | PASA
+I4 | RB1 y RB3 vía diagnosticar con hallazgos acumulados (F11) | síntomas del PDF §6 + hallazgos uno a uno | Pastillas refutada tras la 1.ª prueba y se sugiere Líquido; Líquido confirmado tras la 2.ª; concluyente en 3 de 5 con Discos y Pastillas descartados; hallazgos mal formados no se aceptan | Se cumplieron las 7 verificaciones | i4_rb1_rb3 | PASA
+I5 | Operaciones marcar_sintoma + resolver_contradiccion + cancelar_contradiccion (F11, RB2) con el controlador C | marcar no_arranca; marcar ralenti_inestable; resolver chirrido_frenos (ajeno); resolver ralenti_inestable; marcar no_arranca otra vez; cancelar | Diálogo con mensaje que nombra ambos síntomas; X restaurada; Diagnosticar bloqueado; elección ajena rechazada; la elección válida vuelve a R2; cancelar conserva el estado anterior | pendiente=1; mensaje contiene «incompatibles» y «Ralentí»; sel=[no_arranca]; elección ajena → aviso «uno de los dos» y sigue pendiente; elegir ralentí → sel=[ralenti_inestable]; nuevo choque → diálogo; cancelar → sel intacta | i5_rb2; captura f11_dialogo_rb2.png | PASA
+
+--------------------------------------------------------------------------------
+C. RNF · validaciones y gestión de errores
+--------------------------------------------------------------------------------
+N1 | RNF-01 validación: entradas inválidas se rechazan ANTES del motor | controlador sin servidor alcanzable: marcar id=no_existe; marcar chirrido_frenos=quizas; diagnosticar sin síntomas. Luego con swipl: marcar_sintoma estado=quizas | Mensajes «no está en el catálogo», «Estado inválido» y «al menos un síntoma…»; ninguna llega a swipl. Con swipl, Prolog responde entrada_invalida y la selección no cambia | Los 3 mensajes esperados y la conexión nunca se abrió; Prolog: codigo entrada_invalida, selección intacta | n1_validacion; plunit rnf01_* (id inexistente, hallazgo como síntoma, estado inválido, argumentos faltantes) | PASA
+N2 | RNF-02 JSON malformado | línea cruda «{esto no es json» escrita al stdin de swipl | estado=error, codigo=json_invalido, y el servidor sigue atendiendo | Respuesta con codigo json_invalido; el ping siguiente responde ok | n2_json_malformado | PASA
+N3 | RNF-02 swipl caído | marcar chirrido=presente; matar swipl (SIGKILL); marcar pedal; diagnosticar; Reintentar | Error de conexión en pantalla (diálogo con Reintentar), selección y catálogo intactos, sin reabrir swipl por detrás; al Reintentar se reabre y se reenvía la selección | «Error de conexión: no se pudo escribir a swipl»; sel.n=1; diagnosticar no dibuja y avisa; tras Reintentar sel.n=2 con chirrido presente y el diagnóstico funciona con el proceso nuevo | n3_swipl_caido; captura f12_rnf_swipl_caido.png | PASA
+N4 | RNF-02 KB inválida | servidor con KB rota (pruebas/servidor_kb_rota.pl); cargar catálogo; diagnosticar | kb_invalida con la lista de problemas, catálogo deshabilitado, diagnóstico bloqueado con mensaje, aplicación y swipl en pie | «Error de Prolog (kb_invalida): la base de conocimiento es inválida» + 2 problemas; catalogo_ok=0; «No hay catálogo de síntomas…»; swipl vivo | n4_kb_invalida; captura f12_rnf_kb_invalida.png | PASA
+N5 | RNF-02 sin hipótesis / sin_resultados | servidor con un síntoma sin componentes (pruebas/servidor_sin_hipotesis.pl): marcar sin_relacion=presente; Diagnosticar; diagnosticar con sintomas vacíos; luego agregar chirrido_frenos | «No hay hipótesis con los síntomas ingresados» y sugerencia de agregar síntomas (no es error); sin síntomas el contrato responde sin_resultados; al agregar un síntoma útil se recupera | Ambos textos presentes, aviso no marcado como error; estado sin_resultados; segundo diagnóstico muestra la tabla | n5_sin_hipotesis; captura f12_rnf_sin_hipotesis.png | PASA
+
+--------------------------------------------------------------------------------
+D. CALIBRACIÓN DE tau_alto / tau_bajo (make calibrar; salida en pruebas/evidencia/calibracion_umbrales.txt)
+--------------------------------------------------------------------------------
+Con 6 casos de expectativa conocida sobre la KB real (R1, las 3 etapas de R3, el ejemplo de arranque y
+un caso con «ausente»):
+  - Ventana válida: tau_bajo en [0,0388; 0,1459) y tau_alto en (0,7215; 0,8698].
+  - Los valores del PDF (tau_bajo=0,05; tau_alto=0,85) clasifican bien los 6 casos, pero con margen
+    estrecho de un lado: Pastillas queda en 3,9 % frente al umbral 5 % (1,1 pp) y tau_alto=0,85 queda
+    solo 2,0 pp bajo Relé/Circuito de control (87 %). Es la tendencia a probabilidades extremas del
+    Naive Bayes que advierte el PDF.
+  - Recomendación: el centro de la ventana es tau_alto≈0,80 y tau_bajo≈0,09. No se cambiaron los
+    parámetros (afectaría las pruebas de F02); conviene decidirlo en el grupo y re-ejecutar make calibrar.
+
+Cobertura adicional (no cuenta entre los 15): plunit f05_sintomas (15 pruebas) y f11_retroceso (10):
+pila_vacia, snapshot_invalido, eleccion_invalida, contradicción encadenada, RB2 en el registro/traza,
+fijar_seleccion todo-o-nada, todos los componentes con sistema asignado; y 31 verificaciones unitarias de
+los validadores C (probabilidad fuera de [0,1], campos obligatorios, estados inválidos).
