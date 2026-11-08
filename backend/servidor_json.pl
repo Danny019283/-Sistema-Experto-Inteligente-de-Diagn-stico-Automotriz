@@ -8,6 +8,7 @@
 :- use_module(validacion).
 :- use_module(reglas).
 :- use_module(vehiculo).
+:- use_module(historial).
 % La KB son hechos de `user`: se carga ahí, no dentro de este módulo.
 :- user:consult(hechos).
 
@@ -17,6 +18,7 @@
 main :-
     set_stream(user_input, encoding(utf8)),
     set_stream(user_output, encoding(utf8)),
+    cargar_registros(_),                    % F10: historial de datos/registros.txt
     bucle.
 
 bucle :-
@@ -50,6 +52,9 @@ operacion_conocida(ping).
 operacion_conocida(diagnosticar).
 operacion_conocida(registrar_vehiculo).
 operacion_conocida(consultar_vehiculo).
+operacion_conocida(guardar_diagnostico).
+operacion_conocida(listar_diagnosticos).
+operacion_conocida(cargar_diagnostico).
 
 % RNF-02: con la KB inválida toda operación conocida responde kb_invalida (se valida
 % en cada petición: la KB es chica y así también se detectan cambios en caliente).
@@ -68,6 +73,13 @@ despachar(Id, Op, Args, Resp) :-
         ->  Resp = _{id: Id, estado: error, resultados: [],
                      error: _{codigo: entrada_invalida,
                               mensaje: "la entrada no es válida", problemas: Ps}}
+        ;   E = historial_error(Codigo, M)                           % F10 (backend/historial.pl)
+        ->  error(Id, Codigo, M, Resp)
+        ;   E = registros_corrupto(Ps, Validos)                      % F10: se devuelven los válidos
+        ->  Resp = _{id: Id, estado: error, resultados: Validos,
+                     error: _{codigo: registros_corrupto,
+                              mensaje: "datos/registros.txt tiene líneas dañadas; se omitieron",
+                              problemas: Ps}}
         ;   message_to_string(E, M),
             error(Id, excepcion_prolog, M, Resp)
         )
@@ -85,8 +97,25 @@ ejecutar(diagnosticar, Args, Res) :-
     validar_entrada(Entrada, Problemas),
     (   Problemas \== [] -> throw(entrada_invalida(Problemas))
     ;   \+ ( member(S-_, Entrada), sintoma(S, _, sintoma) ) -> Res = []
-    ;   diagnosticar(Entrada, R), Res = [R]
+    ;   diagnosticar(Entrada, R), Res = [R],
+        recordar_diagnostico(Entrada, R)                             % F10: lo que guardar_diagnostico guarda
     ).
+
+% F10 (backend/historial.pl). guardar_diagnostico (sin args): guarda el último `diagnosticar`
+% con el vehículo registrado y devuelve su resumen. Errores: sin_diagnostico, sin_vehiculo,
+% ya_guardado, error_escritura.
+ejecutar(guardar_diagnostico, _, [R]) :- guardar_diagnostico(R).
+% listar_diagnosticos (sin args): resúmenes del historial; vacío -> sin_resultados. Si el archivo
+% tenía líneas dañadas -> error registros_corrupto con los registros válidos en `resultados`.
+ejecutar(listar_diagnosticos, _, L) :-
+    listar_diagnosticos(L), problemas_registros(Ps),
+    ( Ps == [] -> true ; throw(registros_corrupto(Ps, L)) ).
+% cargar_diagnostico: args {"id": N}; el diagnóstico guardado tal como se generó.
+ejecutar(cargar_diagnostico, Args, [D]) :-
+    (   get_dict(id, Args, Id), integer(Id) -> true
+    ;   throw(entrada_invalida(["id: debe ser un número entero"]))
+    ),
+    cargar_diagnostico(Id, D).
 
 % registrar_vehiculo: args {marca, modelo, anio, cilindrada, combustible, kilometraje}; reemplaza el
 % registro anterior y devuelve el vehículo. Campos inválidos -> error entrada_invalida.

@@ -801,3 +801,103 @@ test(error_no_borra_el_registro, [setup(limpio)]) :-
     ok_json(J), peticion(registrar_vehiculo, J, _), con_campo(anio, 1900, R), R.estado == error,
     vehiculo:vehiculo(_, _, 2015, _, _, _).
 :- end_tests(vehiculo).
+
+% F10 (issue #62): guardar, listar y cargar diagnósticos en el historial (datos/registros.txt).
+% Cada prueba usa un archivo temporal propio; al final se vuelve a la ruta por defecto.
+:- begin_tests(historial).
+:- use_module('../backend/historial').
+:- use_module('../backend/vehiculo').
+
+% once/1: `diagnosticar` deja un punto de elección (el servidor real atiende una sola respuesta).
+pedir(Op, Args, R) :-
+    format(string(L), "{\"id\":9,\"op\":\"~w\",\"args\":~s}", [Op, Args]), once(procesar_linea(L, R)).
+como_json(D, S) :- with_output_to(string(S), json_write_dict(current_output, D, [width(0)])).
+
+% Historial vacío en un archivo temporal, sin vehículo ni diagnóstico en memoria.
+nuevo(Ruta) :-
+    historial:ruta_registros(Def), nb_setval(ruta_por_defecto, Def),
+    tmp_file(registros, Base), atom_concat(Base, '/datos/registros.txt', Ruta),
+    usar_registros(Ruta), retractall(vehiculo:vehiculo(_, _, _, _, _, _)).
+fin(_) :- nb_getval(ruta_por_defecto, Def), usar_registros(Def),
+    retractall(vehiculo:vehiculo(_, _, _, _, _, _)).
+
+con_vehiculo :-
+    pedir(registrar_vehiculo, "{\"marca\":\"Toyota\",\"modelo\":\"Corolla\",\"anio\":2015,\"cilindrada\":\"1.8 L\",\"combustible\":\"gasolina\",\"kilometraje\":120000}", R),
+    R.estado == ok.
+% Escenario del PDF §6: ruido + pedal esponjoso y los tres hallazgos -> concluyente.
+args_pdf("{\"sintomas\":{\"chirrido_frenos\":\"presente\",\"pedal_freno_esponjoso\":\"presente\"},\"hallazgos\":{\"hall_medir_espesor_pastillas_freno\":\"normal\",\"hall_revisar_nivel_estado_liquido_frenos\":\"severo\",\"hall_inspeccionar_disco_rayaduras_alabeo\":\"normal\"}}").
+diagnostico_pdf(R) :- args_pdf(A), pedir(diagnosticar, A, Resp), Resp.estado == ok, [R] = Resp.resultados.
+diagnostico_frenos :-       % solo los síntomas: no concluyente (prueba pendiente)
+    pedir(diagnosticar, "{\"sintomas\":{\"chirrido_frenos\":\"presente\"}}", R), R.estado == ok.
+codigo(R, C) :- R.estado == error, R.error.codigo == C.
+
+test(guardar_sin_diagnostico, [setup(nuevo(_)), cleanup(fin(_))]) :-
+    con_vehiculo, pedir(guardar_diagnostico, "{}", R), codigo(R, sin_diagnostico),
+    R.error.mensaje == "Primero genere un diagnóstico".
+test(guardar_sin_vehiculo, [setup(nuevo(Ruta)), cleanup(fin(_))]) :-
+    diagnostico_pdf(_), pedir(guardar_diagnostico, "{}", R), codigo(R, sin_vehiculo),
+    \+ exists_file(Ruta).
+test(guardar_crea_carpeta_y_archivo, [setup(nuevo(Ruta)), cleanup(fin(_))]) :-
+    \+ exists_file(Ruta), con_vehiculo, diagnostico_pdf(_),
+    pedir(guardar_diagnostico, "{}", R), R.estado == ok, [S] = R.resultados,
+    S.id == 1, S.concluyente == true, S.principal == 'Líquido de frenos',   % los nombres de la KB son átomos
+    exists_file(Ruta).
+% Criterio: el registro contiene todos los campos del paso 17 para el escenario del PDF §6.
+test(registro_tiene_campos_del_paso_17, [setup(nuevo(_)), cleanup(fin(_))]) :-
+    con_vehiculo, diagnostico_pdf(_), pedir(guardar_diagnostico, "{}", _),
+    diagnostico(1, _, vehiculo("Toyota", "Corolla", 2015, "1.8 L", gasolina, 120000), true, sin_inciertos, 3),
+    diagnostico_resultado(1, entrada, E), memberchk(chirrido_frenos-presente, E),
+    diagnostico_resultado(1, componentes, Cs), once(( member(C, Cs), C.id == liquido_frenos )),
+    C.estado == confirmado,
+    diagnostico_resultado(1, pruebas_hechas, Ph), length(Ph, 3),
+    diagnostico_resultado(1, acciones, [A|_]), A.relevancia > 0.85,
+    diagnostico_resultado(1, explicacion, [_|_]),
+    diagnostico_resultado(1, traza, [_|_]).
+% Criterio: cerrar y reabrir conserva los diagnósticos y cargar muestra lo mismo que se generó.
+test(sobrevive_al_reinicio_y_carga_igual, [setup(nuevo(Ruta)), cleanup(fin(_))]) :-
+    con_vehiculo, diagnostico_pdf(R0), pedir(guardar_diagnostico, "{}", _),
+    usar_registros(Ruta),                                   % «reabrir»: memoria vacía y se lee el archivo
+    pedir(listar_diagnosticos, "{}", L), L.estado == ok, [_] = L.resultados,
+    pedir(cargar_diagnostico, "{\"id\":1}", C), C.estado == ok, [D] = C.resultados,
+    como_json(R0, J0), como_json(D.resultado, J1), J0 == J1,
+    D.vehiculo.marca == "Toyota", D.entrada.chirrido_frenos == presente.
+test(no_se_guarda_dos_veces, [setup(nuevo(_)), cleanup(fin(_))]) :-
+    con_vehiculo, diagnostico_pdf(_), pedir(guardar_diagnostico, "{}", _),
+    pedir(guardar_diagnostico, "{}", R), codigo(R, ya_guardado),
+    aggregate_all(count, diagnostico(_, _, _, _, _, _), 1).
+test(ids_consecutivos_y_no_concluyente, [setup(nuevo(Ruta)), cleanup(fin(_))]) :-
+    con_vehiculo, diagnostico_pdf(_), pedir(guardar_diagnostico, "{}", _),
+    diagnostico_frenos, pedir(guardar_diagnostico, "{}", R2), [S2] = R2.resultados,
+    S2.id == 2, S2.concluyente == false, S2.motivo == prueba_pendiente,
+    usar_registros(Ruta), listar_diagnosticos(L), maplist([X, I]>>get_dict(id, X, I), L, [1, 2]).
+test(listar_vacio_es_sin_resultados, [setup(nuevo(_)), cleanup(fin(_))]) :-
+    pedir(listar_diagnosticos, "{}", R), R.estado == sin_resultados.
+test(cargar_inexistente, [setup(nuevo(_)), cleanup(fin(_))]) :-
+    pedir(cargar_diagnostico, "{\"id\":7}", R), codigo(R, no_encontrado).
+test(cargar_id_invalido, [setup(nuevo(_)), cleanup(fin(_)),
+                          forall(member(A, ["{}", "{\"id\":\"1\"}", "{\"id\":1.5}"]))]) :-
+    pedir(cargar_diagnostico, A, R), codigo(R, entrada_invalida).
+% RNF-02: un archivo dañado se informa con registros_corrupto y los registros válidos se conservan.
+test(archivo_corrupto_conserva_los_validos, [setup(nuevo(Ruta)), cleanup(fin(_))]) :-
+    con_vehiculo, diagnostico_pdf(_), pedir(guardar_diagnostico, "{}", _),
+    setup_call_cleanup(open(Ruta, append, S),
+                       format(S, "diagnostico(2, roto (.~nbasura(1).~ndiagnostico_resultado(99, x, 1).~n", []),
+                       close(S)),
+    usar_registros(Ruta),
+    pedir(listar_diagnosticos, "{}", R), codigo(R, registros_corrupto),
+    [V] = R.resultados, V.id == 1, length(R.error.problemas, 3),
+    pedir(cargar_diagnostico, "{\"id\":1}", C), C.estado == ok.
+test(formato_invalido_se_rechaza, [setup(nuevo(Ruta)), cleanup(fin(_))]) :-
+    file_directory_name(Ruta, Dir), make_directory_path(Dir),
+    setup_call_cleanup(open(Ruta, write, S),
+                       format(S, "diagnostico(0, \"f\", x, true, m, 1).~ndiagnostico(1, \"f\", vehiculo(\"a\",\"b\",2015,\"c\",gas,1), quizas, m, 1).~n", []),
+                       close(S)),
+    cargar_registros(Ps), length(Ps, 2), \+ diagnostico(_, _, _, _, _, _).
+% RNF-02: un error de escritura se informa y no cambia nada en memoria.
+test(error_de_escritura_no_cambia_nada, [setup(nuevo(Ruta)), cleanup(fin(_))]) :-
+    file_directory_name(Ruta, Dir), make_directory_path(Dir), make_directory(Ruta),  % la ruta es una carpeta
+    con_vehiculo, diagnostico_pdf(_),
+    pedir(guardar_diagnostico, "{}", R), codigo(R, error_escritura),
+    \+ diagnostico(_, _, _, _, _, _),
+    historial:ultimo_diagnostico(_, _, no).
+:- end_tests(historial).
