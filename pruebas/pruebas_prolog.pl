@@ -1,4 +1,6 @@
 :- use_module(library(plunit)).
+% atom_json_dict/3 y json_write_dict/3: SWI-Prolog 9.0 (Ubuntu 24.04) no los autocarga.
+:- use_module(library(http/json)).
 :- use_module('../backend/servidor_json').
 :- use_module('../backend/validacion').
 :- use_module('../backend/inferencia').
