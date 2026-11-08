@@ -921,9 +921,9 @@ alguno(Ts, Sub) :- member(T, Ts), contiene(T, Sub), !.
 % descenso de Pastillas de 63 % a 3,9 %.
 test(traza_pdf_aportes_y_descenso) :-
     pdf(X), textos_traza(X, Ts),
-    alguno(Ts, "«Pedal de freno esponjoso o blando» aportó +2,2"),
-    alguno(Ts, "«Revisar el nivel y estado del líquido de frenos» aportó +2,8"),
-    alguno(Ts, "«Pastillas de freno» baja de 63,3 % a 3,9 %").
+    alguno(Ts, "\"Pedal de freno esponjoso o blando\" aportó +2,2"),
+    alguno(Ts, "\"Revisar el nivel y estado del líquido de frenos\" aportó +2,8"),
+    alguno(Ts, "\"Pastillas de freno\" baja de 63,3 % a 3,9 %").
 test(traza_pdf_en_orden_cronologico) :-
     pdf(X), findall(R, ( member(D, X.traza), R = D.regla ), Rs),
     Rs == ['R2-R5', 'R7', 'R7-R8', 'RB1', 'R7-R8', 'RB3', 'R7-R8', 'RB1', 'R6', 'R9', 'R10'],
@@ -931,8 +931,8 @@ test(traza_pdf_en_orden_cronologico) :-
 % Criterio 3: los retrocesos RB1 y RB3 aparecen en la traza (RB2 se completa en F11; R2b sí se explica).
 test(retrocesos_en_la_traza) :-
     pdf(X), textos_traza(X, Ts),
-    alguno(Ts, "RB1: «Pastillas de freno» queda descartado (3,9 % ≤ 5,0 %)"),
-    alguno(Ts, "RB3: «Líquido de frenos» queda confirmado (93,1 % ≥ 85,0 %)").
+    alguno(Ts, "RB1: \"Pastillas de freno\" queda descartado (3,9 %, menor o igual que el umbral de 5,0 %)"),
+    alguno(Ts, "RB3: \"Líquido de frenos\" queda confirmado (93,1 %, mayor o igual que el umbral de 85,0 %)").
 test(contradiccion_se_explica) :-
     explicado([no_arranca-presente, ralenti_inestable-presente], X),
     textos_traza(X, Ts), alguno(Ts, "R2b: hay datos incompatibles"),
@@ -947,10 +947,10 @@ test(explicacion_por_componente) :-
     contiene(P.texto, "lo bajó desde 63,3 %").
 test(acciones_con_su_origen) :-
     pdf(X), X.acciones = [A|_], A.accion == purgar_cambiar_liquido_frenos, A.componentes == [liquido_frenos],
-    contiene(A.texto, "«Líquido de frenos» (93,1 % × efectividad 0,95)").
+    contiene(A.texto, "\"Líquido de frenos\" (93,1 %, con efectividad 0,95)").
 test(pruebas_sugeridas_con_su_motivo) :-
     explicado([chirrido_frenos-presente], X), X.pruebas = [P|_],
-    contiene(P.texto, "porque está presente: «Los frenos chirrían»"),
+    contiene(P.texto, "porque está presente: \"Los frenos chirrían\""),
     contiene(X.conclusion, "no concluyente").
 % Criterio 2: al menos 5 explicaciones distintas (mínimo de la sección 5).
 test(cinco_tipos_de_explicacion) :-

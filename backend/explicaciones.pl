@@ -114,15 +114,15 @@ texto_evento(evento(I, _, prueba(C, P, Est, Antes, Despues, Aporte)), T) :- !,
     comillas_componente(C, Nc), prueba(P, Np), porcentaje(Antes, A), porcentaje(Despues, D),
     aporte_texto(Aporte, Ap),
     (   Despues >= Antes -> Verbo = "sube" ; Verbo = "baja" ),
-    format(string(T), "Iteración ~w (R7-R8): foco ~s (~s). Se realiza la prueba «~w» y el resultado es «~w» (aporte ~s al logit): ~s ~s de ~s a ~s.",
+    format(string(T), "Iteración ~w (R7-R8): foco ~s (~s). Se realiza la prueba \"~w\" y el resultado es \"~w\" (aporte ~s al logit): ~s ~s de ~s a ~s.",
            [I, Nc, A, Np, Est, Ap, Nc, Verbo, A, D]).
 texto_evento(evento(_, 'RB1', retroceso(C, P)), T) :- !,
     comillas_componente(C, Nc), porcentaje(P, Pp), parametro(tau_bajo, B), porcentaje(B, Bp),
-    format(string(T), "RB1: ~s queda descartado (~s ≤ ~s). Se retrocede al punto de decisión y se pasa al siguiente candidato; el hallazgo se conserva.",
+    format(string(T), "RB1: ~s queda descartado (~s, menor o igual que el umbral de ~s). Se retrocede al punto de decisión y se pasa al siguiente candidato; el hallazgo se conserva.",
            [Nc, Pp, Bp]).
 texto_evento(evento(_, 'RB3', retroceso(C, P)), T) :- !,
     comillas_componente(C, Nc), porcentaje(P, Pp), parametro(tau_alto, A), porcentaje(A, Ap),
-    format(string(T), "RB3: ~s queda confirmado (~s ≥ ~s). Se vuelve al punto de decisión para buscar otros componentes afectados.",
+    format(string(T), "RB3: ~s queda confirmado (~s, mayor o igual que el umbral de ~s). Se vuelve al punto de decisión para buscar otros componentes afectados.",
            [Nc, Pp, Ap]).
 texto_evento(evento(_, _, sin_pruebas(C)), T) :- !,
     comillas_componente(C, Nc),
@@ -130,7 +130,7 @@ texto_evento(evento(_, _, sin_pruebas(C)), T) :- !,
 texto_evento(evento(_, _, fin(Motivo, _, I)), T) :- !,
     texto_fin(Motivo, I, T).
 texto_evento(evento(_, _, acciones(Acs)), T) :- !,
-    findall(S, ( member(A, Acs), porcentaje(A.relevancia, R), format(string(S), "«~w» (~s)", [A.nombre, R]) ),
+    findall(S, ( member(A, Acs), porcentaje(A.relevancia, R), format(string(S), "\"~w\" (~s)", [A.nombre, R]) ),
             Partes),
     unir(Partes, Lista),
     format(string(T), "R9: acciones correctivas sobre los componentes confirmados: ~s.", [Lista]).
@@ -196,7 +196,7 @@ texto_componente(descartado, C, P, Evs, T) :- !,
     comillas_componente(C, Nc), porcentaje(P, Pp),
     (   member(evento(_, _, prueba(C, Pr, Est, A, _, _)), Evs)
     ->  prueba(Pr, Np), porcentaje(A, Ap),
-        format(string(T), "~s se descarta (~s): el resultado «~w» de la prueba «~w» lo bajó desde ~s.",
+        format(string(T), "~s se descarta (~s): el resultado \"~w\" de la prueba \"~w\" lo bajó desde ~s.",
                [Nc, Pp, Est, Np, Ap])
     ;   parametro(tau_bajo, B), porcentaje(B, Bp),
         format(string(T), "~s se descarta: su probabilidad (~s) quedó por debajo de ~s con los datos dados.",
@@ -219,12 +219,12 @@ acciones_texto([A|As], Comps, [_{accion: Id, nombre: A.nombre, relevancia: A.rel
                      P = D.probabilidad, accion_componente(Id, C, M) ), Origen),
     findall(C, member(C-_-_, Origen), Cs),
     maplist(texto_origen, Origen, Partes), unir(Partes, Lista), porcentaje(A.relevancia, R),
-    format(string(T), "«~w» (relevancia ~s): atiende ~s.", [A.nombre, R, Lista]),
+    format(string(T), "\"~w\" (relevancia ~s): atiende ~s.", [A.nombre, R, Lista]),
     acciones_texto(As, Comps, Ts).
 
 texto_origen(C-P-M, S) :-
     comillas_componente(C, Nc), porcentaje(P, Pp), decimal(M, Mt),
-    format(string(S), "~s (~s × efectividad ~s)", [Nc, Pp, Mt]).
+    format(string(S), "~s (~s, con efectividad ~s)", [Nc, Pp, Mt]).
 
 % pruebas_texto(+Sugeridas, +X0, -Lista): qué síntomas presentes hacen relevante cada prueba.
 pruebas_texto([], _, []).
@@ -234,9 +234,9 @@ pruebas_texto([D|Ds], X0, [_{prueba: P, nombre: D.nombre, componente: C, relevan
     comillas_componente(C, Nc), porcentaje(D.relevancia, R),
     findall(N, ( prueba_sintoma(P, S, _), memberchk(S-presente, X0), nombre_dato(S, N) ), Ss),
     (   Ss == []
-    ->  format(string(T), "Se sugiere «~w» (relevancia ~s) para verificar ~s.", [D.nombre, R, Nc])
+    ->  format(string(T), "Se sugiere \"~w\" (relevancia ~s) para verificar ~s.", [D.nombre, R, Nc])
     ;   unir(Ss, Lista),
-        format(string(T), "Se sugiere «~w» (relevancia ~s) para verificar ~s, porque está presente: ~s.",
+        format(string(T), "Se sugiere \"~w\" (relevancia ~s) para verificar ~s, porque está presente: ~s.",
                [D.nombre, R, Nc, Lista])
     ),
     pruebas_texto(Ds, X0, Ts).
@@ -265,17 +265,17 @@ conclusion_motivo(_, Ns, Res, T) :-
     ).
 
 % ---------- Utilidades de texto ----------
-comillas_componente(C, S) :- componente(C, N, _, _), !, format(string(S), "«~w»", [N]).
-comillas_componente(C, S) :- format(string(S), "«~w»", [C]).
+comillas_componente(C, S) :- componente(C, N, _, _), !, format(string(S), "\"~w\"", [N]).
+comillas_componente(C, S) :- format(string(S), "\"~w\"", [C]).
 
 % nombre_dato(+S, -Texto): un síntoma por su nombre; un hallazgo como el resultado de su prueba.
 nombre_dato(S, T) :-
     sintoma(S, N, Tipo), !,
     (   Tipo == hallazgo, sub_atom(S, 0, _, _, hall_), sub_atom(S, 5, _, 0, P), prueba(P, Np)
-    ->  format(string(T), "el resultado de «~w»", [Np])
-    ;   format(string(T), "«~w»", [N])
+    ->  format(string(T), "el resultado de \"~w\"", [Np])
+    ;   format(string(T), "\"~w\"", [N])
     ).
-nombre_dato(S, T) :- format(string(T), "«~w»", [S]).
+nombre_dato(S, T) :- format(string(T), "\"~w\"", [S]).
 
 % porcentaje(+P, -Texto): 0.6331 -> "63,3 %" (coma decimal).
 porcentaje(P, T) :- X is P * 100, format(string(S), "~1f", [X]), coma(S, D), string_concat(D, " %", T).
