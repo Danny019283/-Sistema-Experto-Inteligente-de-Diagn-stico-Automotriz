@@ -3,7 +3,7 @@ NO USAR la skill/harness tdd-sdd (ni /start-dev, tdd-cycle, ni los agentes redac
 # Sistema experto de diagnóstico automotriz
 - Backend Prolog (`backend/hechos.pl` = KB, `backend/servidor_json.pl` = servidor), front en C (Nuklear+SDL2). Contrato JSON en README.md.
 - `make test` corre las pruebas Prolog (`pruebas/pruebas_prolog.pl`).
-- Commits: `feat(F0N): ...` con `Refs #<issue>` (F01 → #54, F02 → #55, F03 → #65, F04 → #56, F07 → #59, F08 → #60, F10 → #62). Una rama por feature: F01 en feature/f01-base-conocimiento, F02 en feature/f02-motor-inferencia (crearla ANTES de commitear).
+- Commits: `feat(F0N): ...` con `Refs #<issue>` (F01 → #54, F02 → #55, F03 → #65, F04 → #56, F07 → #59, F08 → #60, F09 → #61, F10 → #62). Una rama por feature: F01 en feature/f01-base-conocimiento, F02 en feature/f02-motor-inferencia (crearla ANTES de commitear).
 - Después de CADA paso: generar tests (en `pruebas/pruebas_prolog.pl`) y verificar que pasen con `make test` (exit 0, sin FAILED ni Warning) antes de commitear.
 
 # Estado de F01 (issue #54)
@@ -40,3 +40,7 @@ Hecho (backend): backend/pruebas_adicionales.pl, ops `recomendar_pruebas` (pendi
 Decisión: solo se registra la prueba pendiente (el motor aplica un hallazgo solo cuando R7 pide esa prueba).
 Hecho (C): frontend/pruebas_adicionales.c (valida la respuesta), controlador_recomendar_pruebas / controlador_registrar_resultado
 (guarda el hallazgo con `controlador_hallazgo`; al reabrir swipl se recalcula el diagnóstico), pantalla Pruebas; `make capturas` f07_*.
+# Estado de F09 (issue #61, rama feature/f09-acciones)
+Hecho: backend/acciones.pl (op `acciones_correctivas`: Ra noisy-OR solo sobre confirmados existentes, origen con
+efectividad, mensaje "Sin acciones: ningún componente confirmado" con el siguiente paso); frontend/acciones.c (valida
+Ra/P/efectividad en [0, 1]), controlador_acciones, pantalla Acciones (botón "Ir a Pruebas"); `make capturas` f09_*.
