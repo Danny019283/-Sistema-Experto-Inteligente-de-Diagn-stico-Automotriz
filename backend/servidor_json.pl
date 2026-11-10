@@ -8,8 +8,9 @@
 :- use_module(validacion).
 :- use_module(reglas).
 :- use_module(vehiculo).
-:- use_module(historial).
-:- use_module(explicaciones).
+:- use_module(sistemas).       % F05/F06: sistema por componente y síntoma
+:- use_module(historial).      % F10: historial de diagnósticos
+:- use_module(explicaciones).  % F08: traza y explicación del razonamiento
 % La KB son hechos de `user`: se carga ahí, no dentro de este módulo.
 :- user:consult(hechos).
 
@@ -49,6 +50,10 @@ procesar_linea(Linea, Resp) :-
     ;   error(null, json_invalido, "mensaje JSON mal formado o sin id/op", Resp)
     ).
 
+:- multifile operacion_conocida/1, ejecutar/3.
+:- discontiguous operacion_conocida/1, ejecutar/3.
+% Las features añaden sus operaciones con cláusulas multifile (ver ops_sintomas.pl y
+% retroceso.pl). Un error de dominio se lanza con throw(error_contrato(Codigo, Mensaje)).
 operacion_conocida(ping).
 operacion_conocida(diagnosticar).
 operacion_conocida(registrar_vehiculo).
@@ -67,7 +72,7 @@ despachar(Id, Op, Args, Resp) :-
                  error: _{codigo: kb_invalida,
                           mensaje: "la base de conocimiento es inválida",
                           problemas: Problemas}}
-    ;   catch(ejecutar(Op, Args, Res), E, true),
+    ;   (   catch(ejecutar(Op, Args, Res), E, true) -> true ; E = operacion_fallida ),
         (   var(E)
         ->  estado_resultados(Res, Estado),
             Resp = _{id: Id, estado: Estado, resultados: Res}
@@ -75,6 +80,8 @@ despachar(Id, Op, Args, Resp) :-
         ->  Resp = _{id: Id, estado: error, resultados: [],
                      error: _{codigo: entrada_invalida,
                               mensaje: "la entrada no es válida", problemas: Ps}}
+        ;   E = error_contrato(Codigo, Mensaje)
+        ->  error(Id, Codigo, Mensaje, Resp)
         ;   E = historial_error(Codigo, M)                           % F10 (backend/historial.pl)
         ->  error(Id, Codigo, M, Resp)
         ;   E = registros_corrupto(Ps, Validos)                      % F10: se devuelven los válidos
@@ -99,8 +106,8 @@ ejecutar(diagnosticar, Args, Res) :-
     validar_entrada(Entrada, Problemas),
     (   Problemas \== [] -> throw(entrada_invalida(Problemas))
     ;   \+ ( member(S-_, Entrada), sintoma(S, _, sintoma) ) -> Res = []
-    ;   diagnosticar(Entrada, R), Res = [R],
-        recordar_diagnostico(Entrada, R)                             % F10: lo que guardar_diagnostico guarda
+    ;   diagnosticar(Entrada, R0), enriquecer_diagnostico(R0, R), Res = [R],
+        recordar_diagnostico(Entrada, R)                             % F10: se guarda el resultado ya enriquecido
     ).
 
 % F10 (backend/historial.pl). guardar_diagnostico (sin args): guarda el último `diagnosticar`
@@ -152,3 +159,7 @@ error(Id, Codigo, Mensaje, _{id: Id, estado: error, resultados: [],
                              error: _{codigo: Codigo, mensaje: Mensaje}}).
 
 message_to_string(E, S) :- format(string(S), "~p", [E]).
+
+% Operaciones de F05 (síntomas) y F11 (RB2): se cargan al final, ya existen los puntos multifile.
+:- use_module(ops_sintomas).
+:- use_module(retroceso).

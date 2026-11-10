@@ -1,8 +1,10 @@
 #include "controlador.h"
 
 #include <stdio.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 void controlador_iniciar(Controlador *k, const char *script) {
     memset(k, 0, sizeof *k);
@@ -82,6 +84,25 @@ int controlador_registrar_vehiculo(Controlador *k) {
     return 1;
 }
 
+typedef enum { LL_OK, LL_SIN_RES, LL_ERR_PROLOG, LL_ERR_CONEXION } Llamada;
+static Llamada llamar_crudo(Controlador *k, const char *op, cJSON *args, cJSON **resp);
+
+/* swipl nuevo: el estado de la sesión vivía en el proceso anterior. Se vuelve a registrar el
+ * vehículo (F04) y a enviar la selección de síntomas (F05); un diálogo RB2 pendiente se pierde,
+ * pero la selección que había es la anterior a la contradicción. */
+static void reponer_sesion(Controlador *k) {
+    k->contra.pendiente = 0;
+    if (k->registrado) {
+        FormVehiculo v;
+        enviar_vehiculo(k, &k->guardado, &v);
+    }
+    if (k->sel.n > 0) {
+        cJSON *r;
+        llamar_crudo(k, "fijar_seleccion", seleccion_a_args_completa(&k->sel), &r);
+        cJSON_Delete(r);
+    }
+}
+
 void controlador_probar_conexion(Controlador *k) {
     char err[256] = "";
     int nuevo = !conexion_viva(&k->con);
@@ -90,10 +111,7 @@ void controlador_probar_conexion(Controlador *k) {
         snprintf(k->mensaje, sizeof k->mensaje, "No se pudo lanzar swipl: %s", err);
         return;
     }
-    if (nuevo && k->registrado) { /* swipl nuevo: el vehículo vive en Prolog, se vuelve a registrar */
-        FormVehiculo v;
-        enviar_vehiculo(k, &k->guardado, &v);
-    }
+    if (nuevo) reponer_sesion(k);
     cJSON *r = conexion_peticion(&k->con, "ping", NULL, err, sizeof err);
     if (!r) {
         k->hay_error = 1;
@@ -102,6 +120,275 @@ void controlador_probar_conexion(Controlador *k) {
     }
     controlador_interpretar(k, r);
     cJSON_Delete(r);
+    if (!k->hay_error && !k->catalogo_ok) controlador_cargar_catalogo(k);   /* F05 */
 }
 
 void controlador_cerrar(Controlador *k) { conexion_cerrar(&k->con); }
+
+/* ===================== F05 · F06 · F11: operaciones contra Prolog ===================== */
+
+/* Una petición sin reconexión. Los fallos de transporte marcan hay_error (diálogo de conexión de la
+ * interfaz); un error de Prolog sobre datos NO lo marca (el sistema sigue conectado), salvo
+ * kb_invalida, que la interfaz muestra igual que antes. En LL_OK/LL_SIN_RES deja el JSON en *resp. */
+static Llamada llamar_crudo(Controlador *k, const char *op, cJSON *args, cJSON **resp) {
+    char err[256] = "";
+    *resp = NULL;
+    cJSON *r = conexion_peticion(&k->con, op, args, err, sizeof err);
+    if (!r) {
+        k->hay_error = 1;
+        snprintf(k->mensaje, sizeof k->mensaje, "Error de conexión: %s", err);
+        return LL_ERR_CONEXION;
+    }
+    const cJSON *estado = cJSON_GetObjectItemCaseSensitive(r, "estado");
+    const char *e = cJSON_IsString(estado) ? estado->valuestring : "";
+    if (!strcmp(e, "ok") || !strcmp(e, "sin_resultados")) {
+        *resp = r;
+        return e[0] == 'o' ? LL_OK : LL_SIN_RES;
+    }
+    if (!strcmp(e, "error")) {
+        controlador_interpretar(k, r);   /* deja código, mensaje y problemas en k->mensaje */
+        const cJSON *cod = cJSON_GetObjectItemCaseSensitive(cJSON_GetObjectItemCaseSensitive(r, "error"), "codigo");
+        if (!cJSON_IsString(cod) || strcmp(cod->valuestring, "kb_invalida") != 0) k->hay_error = 0;
+    } else {
+        k->hay_error = 1;
+        snprintf(k->mensaje, sizeof k->mensaje, "Respuesta de Prolog con estado inválido");
+    }
+    cJSON_Delete(r);
+    return LL_ERR_PROLOG;
+}
+
+/* Sin conexión no se reabre swipl por detrás: la interfaz muestra el diálogo de error y solo
+ * «Reintentar» (controlador_probar_conexion) reabre y repone la sesión. */
+static Llamada llamar(Controlador *k, const char *op, cJSON *args, cJSON **resp) {
+    (void)op;
+    *resp = NULL;
+    if (!conexion_viva(&k->con)) {
+        cJSON_Delete(args);
+        k->hay_error = 1;
+        snprintf(k->mensaje, sizeof k->mensaje, "Error de conexión: Prolog no está conectado");
+        return LL_ERR_CONEXION;
+    }
+    return llamar_crudo(k, op, args, resp);
+}
+
+static void texto(char *dst, size_t n, const char *src) { snprintf(dst, n, "%s", src); }
+
+/* ---------------------------------------------------------------- F05 ---- */
+
+void controlador_cargar_catalogo(Controlador *k) {
+    cJSON *resp;
+    char err[256] = "";
+    k->catalogo_ok = 0;
+    k->aviso[0] = '\0';
+    Llamada l = llamar(k, "catalogo_sintomas", NULL, &resp);
+    if (l == LL_OK) {
+        if (catalogo_parsear(&k->cat, cJSON_GetObjectItemCaseSensitive(resp, "resultados"), err, sizeof err) < 0)
+            snprintf(k->aviso, sizeof k->aviso, "Catálogo inválido: %s", err);
+        else
+            k->catalogo_ok = k->cat.n > 0;
+    } else if (l == LL_SIN_RES) {
+        k->cat.n = 0;
+        texto(k->aviso, sizeof k->aviso, "El catálogo de síntomas está vacío (revisa la base de conocimiento).");
+    } else if (l == LL_ERR_PROLOG) {
+        texto(k->aviso, sizeof k->aviso, k->mensaje);
+    }
+    cJSON_Delete(resp);
+}
+
+/* Aplica {seleccion, contradiccion} de una respuesta de marcar/quitar/limpiar/resolver/cancelar.
+ * Si es inválida no toca nada (la selección previa queda intacta). 0 ok, -1 inválida. */
+static int aplicar_estado(Controlador *k, const cJSON *resp) {
+    char err[256] = "";
+    const cJSON *res = cJSON_GetObjectItemCaseSensitive(resp, "resultados");
+    const cJSON *r0 = cJSON_IsArray(res) ? cJSON_GetArrayItem(res, 0) : NULL;
+    const cJSON *sel = cJSON_GetObjectItemCaseSensitive(r0, "seleccion");
+    const cJSON *con = cJSON_GetObjectItemCaseSensitive(r0, "contradiccion");
+    Contradiccion c;
+    memset(&c, 0, sizeof c);
+
+    if (cJSON_IsObject(con)) {
+        const cJSON *par = cJSON_GetObjectItemCaseSensitive(con, "par");
+        const cJSON *a = cJSON_GetArrayItem(par, 0), *b = cJSON_GetArrayItem(par, 1);
+        if (!cJSON_IsArray(par) || cJSON_GetArraySize(par) != 2 ||
+            json_texto(a, "id", c.id_a, sizeof c.id_a, err, sizeof err) < 0 ||
+            json_texto(a, "nombre", c.nombre_a, sizeof c.nombre_a, err, sizeof err) < 0 ||
+            json_texto(b, "id", c.id_b, sizeof c.id_b, err, sizeof err) < 0 ||
+            json_texto(b, "nombre", c.nombre_b, sizeof c.nombre_b, err, sizeof err) < 0 ||
+            json_texto(con, "mensaje", c.mensaje, sizeof c.mensaje, err, sizeof err) < 0) {
+            snprintf(k->aviso, sizeof k->aviso, "Respuesta inválida de Prolog (contradicción): %s",
+                     err[0] ? err : "formato inesperado");
+            return -1;
+        }
+        c.pendiente = 1;
+    } else if (con && !cJSON_IsNull(con)) {
+        texto(k->aviso, sizeof k->aviso, "Respuesta inválida de Prolog: 'contradiccion'");
+        return -1;
+    }
+    if (seleccion_parsear(&k->sel, sel, err, sizeof err) < 0) {
+        snprintf(k->aviso, sizeof k->aviso, "Respuesta inválida de Prolog (selección): %s", err);
+        return -1;
+    }
+    k->contra = c;
+    return 0;
+}
+
+static void enviar_seleccion(Controlador *k, const char *op, cJSON *args) {
+    cJSON *resp;
+    Llamada l = llamar(k, op, args, &resp);
+    k->aviso[0] = '\0';
+    if (l == LL_OK || l == LL_SIN_RES) {
+        aplicar_estado(k, resp);
+        k->hay_diag = 0;                 /* el diagnóstico mostrado ya no corresponde a la selección */
+        k->aviso_diag[0] = '\0';
+    } else if (l == LL_ERR_PROLOG) {     /* RNF-02: la selección previa no se altera */
+        texto(k->aviso, sizeof k->aviso, k->mensaje);
+    }
+    cJSON_Delete(resp);
+}
+
+void controlador_marcar(Controlador *k, const char *id, EstadoSintoma estado) {
+    if (!catalogo_contiene(&k->cat, id)) {   /* RNF-01: solo ids del catálogo recibido */
+        snprintf(k->aviso, sizeof k->aviso, "El síntoma '%s' no está en el catálogo: no se envía.", id);
+        return;
+    }
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddStringToObject(args, "id", id);
+    cJSON_AddStringToObject(args, "estado", estado_texto(estado));
+    enviar_seleccion(k, "marcar_sintoma", args);
+}
+
+void controlador_quitar(Controlador *k, const char *id) {
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddStringToObject(args, "id", id);
+    enviar_seleccion(k, "quitar_sintoma", args);
+}
+
+void controlador_limpiar(Controlador *k) {
+    k->n_hall = 0;                       /* los resultados de pruebas dependían de esos síntomas */
+    enviar_seleccion(k, "limpiar_sintomas", NULL);
+}
+
+int controlador_puede_diagnosticar(const Controlador *k) {
+    return k->catalogo_ok && !k->contra.pendiente && seleccion_cuenta_calculo(&k->sel) > 0;
+}
+
+/* ---------------------------------------------------------------- F06 ---- */
+
+static void aviso_diag(Controlador *k, int es_error, const char *txt) {
+    k->aviso_diag_error = es_error;
+    texto(k->aviso_diag, sizeof k->aviso_diag, txt);
+}
+
+int controlador_hallazgo(Controlador *k, const char *id, const char *estado) {
+    if (strncmp(id, "hall_", 5) != 0 || strlen(id) >= ID_LEN ||
+        (strcmp(estado, "normal") && strcmp(estado, "leve") && strcmp(estado, "severo")))
+        return 0;
+    for (int i = 0; i < k->n_hall; i++)
+        if (!strcmp(k->hall[i].id, id)) { texto(k->hall[i].estado, sizeof k->hall[i].estado, estado); return 1; }
+    if (k->n_hall >= HALL_MAX) return 0;
+    texto(k->hall[k->n_hall].id, ID_LEN, id);
+    texto(k->hall[k->n_hall].estado, sizeof k->hall[0].estado, estado);
+    k->n_hall++;
+    return 1;
+}
+
+void controlador_diagnosticar(Controlador *k) {
+    char err[256] = "";
+    k->hay_diag = 0;
+    k->aviso_diag[0] = '\0';
+    if (!k->catalogo_ok) {
+        aviso_diag(k, 1, "No hay catálogo de síntomas: no se puede diagnosticar.");
+        return;
+    }
+    if (seleccion_validar_envio(&k->sel, &k->cat, err, sizeof err) < 0) {   /* RNF-01: antes de llamar */
+        aviso_diag(k, 1, err);
+        return;
+    }
+    cJSON *args = seleccion_a_args(&k->sel);
+    if (k->n_hall > 0) {
+        cJSON *h = cJSON_AddObjectToObject(args, "hallazgos");
+        for (int i = 0; i < k->n_hall; i++) cJSON_AddStringToObject(h, k->hall[i].id, k->hall[i].estado);
+    }
+    cJSON *resp;
+    Llamada l = llamar(k, "diagnosticar", args, &resp);
+    switch (l) {
+    case LL_OK:
+        if (diagnostico_parsear(&k->diag, cJSON_GetObjectItemCaseSensitive(resp, "resultados"), err, sizeof err) < 0) {
+            char m[600];
+            snprintf(m, sizeof m, "Respuesta inválida de Prolog, no se muestra: %s", err);
+            aviso_diag(k, 1, m);
+        } else if (k->diag.n == 0) {     /* sin hipótesis: lo mismo que sin_resultados */
+            aviso_diag(k, 0, "No hay hipótesis con los síntomas ingresados. Agrega más síntomas o revisa sus estados.");
+        } else {
+            k->hay_diag = 1;
+        }
+        break;
+    case LL_SIN_RES:
+        aviso_diag(k, 0, "No hay hipótesis con los síntomas ingresados. Agrega más síntomas o revisa sus estados.");
+        break;
+    default:
+        aviso_diag(k, 1, k->mensaje);    /* código y mensaje del error, sin cerrar la aplicación */
+        break;
+    }
+    cJSON_Delete(resp);
+}
+
+/* ---------------------------------------------------------------- F11 ---- */
+
+void controlador_resolver(Controlador *k, const char *id_elegido) {
+    if (!k->contra.pendiente) return;
+    if (strcmp(id_elegido, k->contra.id_a) && strcmp(id_elegido, k->contra.id_b)) {   /* RNF-01 */
+        texto(k->aviso, sizeof k->aviso, "Solo puedes elegir uno de los dos síntomas en conflicto.");
+        return;
+    }
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddStringToObject(args, "elegido", id_elegido);
+    enviar_seleccion(k, "resolver_contradiccion", args);
+}
+
+void controlador_cancelar_contradiccion(Controlador *k) {
+    /* Cancelar siempre cierra el diálogo: la selección que muestra C ya es la anterior a la
+     * contradicción (Prolog restauró el snapshot al detectar el choque). */
+    if (!k->contra.pendiente) return;
+    cJSON *resp;
+    Llamada l = llamar(k, "cancelar_contradiccion", NULL, &resp);
+    if (l == LL_OK || l == LL_SIN_RES) aplicar_estado(k, resp);
+    cJSON_Delete(resp);
+    k->contra.pendiente = 0;
+    texto(k->aviso, sizeof k->aviso, "Marcado cancelado: se conserva la selección anterior.");
+}
+
+/* ------------------------------------------------------------ acciones ---- */
+
+int controlador_accion(Controlador *k, const char *accion) {
+    char buf[200];
+    snprintf(buf, sizeof buf, "%s", accion);
+    char *arg = strchr(buf, ':');
+    if (arg) *arg++ = '\0';
+
+    if (!strcmp(buf, "catalogo"))              controlador_cargar_catalogo(k);
+    else if (!strcmp(buf, "limpiar"))          controlador_limpiar(k);
+    else if (!strcmp(buf, "diagnosticar"))     controlador_diagnosticar(k);
+    else if (!strcmp(buf, "cancelar"))         controlador_cancelar_contradiccion(k);
+    else if (!strcmp(buf, "matar")) {          /* simula la caída de swipl */
+        if (k->con.pid > 0) { kill(k->con.pid, SIGKILL); usleep(150000); }
+    } else if (!strcmp(buf, "quitar") && arg)  controlador_quitar(k, arg);
+    else if (!strcmp(buf, "resolver") && arg)  controlador_resolver(k, arg);
+    else if ((!strcmp(buf, "marcar") || !strcmp(buf, "hallazgo")) && arg) {
+        char *igual = strchr(arg, '=');
+        if (!igual) return -1;
+        *igual++ = '\0';
+        if (buf[0] == 'h') {
+            if (!controlador_hallazgo(k, arg, igual))
+                snprintf(k->aviso_diag, sizeof k->aviso_diag, "Hallazgo inválido: %s=%s", arg, igual);
+        } else {
+            EstadoSintoma e;
+            if (estado_desde_texto(igual, &e) < 0)
+                snprintf(k->aviso, sizeof k->aviso, "Estado inválido '%s': no se envía a Prolog.", igual);
+            else
+                controlador_marcar(k, arg, e);
+        }
+    } else
+        return -1;
+    return 0;
+}

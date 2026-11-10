@@ -14,17 +14,23 @@ Pendiente: RB2 (restaurar X tras contradicción) → F11; guardar en `diagnostic
 # Estado de F04 (issue #56, rama feature/f04-registro-vehiculo, creada desde F03)
 Hecho: backend/vehiculo.pl (`vehiculo/6` dinámico, un solo registro; ops `registrar_vehiculo`/`consultar_vehiculo`, README), formulario Nuklear (frontend/vehiculo.c + interfaz.c), validación en C y Prolog, errores por campo sin perder lo escrito; al reabrir swipl se vuelve a registrar el vehículo. El resumen sale en Vehículo y Diagnóstico.
 Pendiente: mostrar el vehículo en el reporte → F10/F13 (usar `consultar_vehiculo`).
+# Estado de F05, F06, F11 y F12 (issues #57, #58, #63 y F12; integradas sobre F00-F04)
+Hecho: F05 (backend/ops_sintomas.pl, memoria_x.pl, sistemas.pl; pantalla Síntomas con catálogo por sistema y estados presente/ausente/desconocido); F06 (pantalla Diagnóstico: tabla por P, barras, descartadas aparte, concluyente / no concluyente, iteraciones; frontend/diagnostico.c valida la respuesta); F11 solo RB2 (backend/retroceso.pl, diálogo en interfaz.c; RB1/RB3 ya vivían en reglas.pl); F12 (15 casos en pruebas/casos_prueba.txt, `make test` con plunit + C + integración con swipl real, `make capturas`, `make calibrar`). Detalle y decisiones: documentacion/integracion_f05_f06_f11_f12.md.
+Decisión a revisar: la KB no tiene «sistema»; backend/sistemas.pl lo clasifica (tabla de componentes + síntoma deducido). Un componente nuevo sin fila cae en «General» y una prueba lo señala.
+Pendiente: pantalla Pruebas (F07) debe usar `controlador_hallazgo`; calibrar tau_alto/tau_bajo en grupo (`make calibrar`: 0,85 queda a 2 pp de Relé/Circuito de control).
 # Estado de F10 (issue #62, rama feature/f10-guardar-diagnostico)
 Hecho (backend): backend/historial.pl (`diagnostico/6` y `diagnostico_resultado/3` dinámicos, persistidos en
 datos/registros.txt, leídos al arrancar `main`); ops `guardar_diagnostico` (guarda el último `diagnosticar`, que el
 servidor recuerda con `recordar_diagnostico/2`), `listar_diagnosticos`, `cargar_diagnostico` (README). Errores
 sin_diagnostico, sin_vehiculo, ya_guardado, error_escritura, no_encontrado, registros_corrupto (con los válidos en
 `resultados`). datos/registros.txt está en .gitignore; las pruebas usan un archivo temporal (`usar_registros/1`).
-Pendiente: botón «Guardar» y lista del historial en la interfaz C.
+El resultado que se guarda es el ya enriquecido por `enriquecer_diagnostico/2` (F06).
+Pendiente: botón «Guardar» (en la pantalla Diagnóstico de F06) y lista del historial en la interfaz C.
 # Estado de F08 (issue #60, rama feature/f08-explicacion, creada desde F10)
 Hecho (backend): backend/explicaciones.pl (`explicar/3`: traza evento(Iteracion, Regla, Datos) con texto, reconstruyendo X
 paso a paso desde la traza del motor; explicación por componente, acciones con su origen, pruebas sugeridas, conclusión);
-op `explicar` (último diagnóstico o `{"id": N}` guardado). Textos con números de la KB (coma decimal). RB2 → F11.
-Pendiente: panel de traza en la interfaz C.
+op `explicar` (último diagnóstico o `{"id": N}` guardado). Textos con números de la KB (coma decimal).
+Pendiente: narrar en la traza los eventos rb2 de F11 (ya vienen en `diagnosticar` y en retroceso:registro_rb/1);
+panel de traza en la interfaz C.
 Nota SWI 9.0 (Ubuntu): no autocarga library(http/json) (por eso el import en pruebas_prolog.pl) y `diagnosticar`
-deja un punto de elección (26 avisos «succeeded with choicepoint» en pruebas de F02).
+deja un punto de elección (avisos «succeeded with choicepoint» en pruebas de F02 y F05).

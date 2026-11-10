@@ -20,7 +20,9 @@ Nuklear y cJSON ya vienen vendorizados (`frontend/vendor/`, `integracion/vendor/
 ```
 make build   # compila ./sistema_experto (-Wall -Wextra)
 make run     # abre la ventana; «Probar conexión» envía `ping` a Prolog
-make test    # pruebas Prolog (no requiere SDL2)
+make test    # pruebas Prolog + C (controlador, validadores e integración con swipl real; sin SDL2)
+make capturas   # capturas de pantalla reproducibles en pruebas/evidencia/ (necesita display / xvfb-run)
+make calibrar   # ventana válida de tau_alto / tau_bajo con los casos de prueba
 make clean
 ```
 
@@ -50,12 +52,18 @@ Respuesta:
  "error": {"codigo": "kb_invalida", "mensaje": "la base de conocimiento es inválida",
            "problemas": ["accion_componente: accion inexistente fantasma"]}}
 ```
-- `entrada_invalida` (solo `diagnosticar`): síntomas inexistentes, estados fuera de rango,
-  repetidos, hallazgos de pruebas inexistentes o `sintomas`/`hallazgos` que no son objetos;
-  añade `error.problemas` (lista de textos).
-- Operaciones: `ping` → `[{"mensaje": "pong"}]`; `diagnosticar`, `registrar_vehiculo`,
-  `consultar_vehiculo`, `guardar_diagnostico`, `listar_diagnosticos`, `cargar_diagnostico` y
-  `explicar` (abajo).
+- `entrada_invalida` (`diagnosticar`, `marcar_sintoma`, `quitar_sintoma`, `fijar_seleccion`): síntomas
+  inexistentes, estados fuera de rango, repetidos, hallazgos de pruebas inexistentes o
+  `sintomas`/`hallazgos` que no son objetos; añade `error.problemas` (lista de textos).
+- Errores de dominio de F11: `contradiccion`, `sin_contradiccion`, `eleccion_invalida`, `pila_vacia`,
+  `snapshot_invalido` (llevan `error.mensaje`).
+- Errores del historial (F10): `sin_diagnostico`, `sin_vehiculo`, `ya_guardado`, `error_escritura`,
+  `no_encontrado`, `registros_corrupto` (ver «guardar_diagnostico» abajo).
+- Operaciones: `ping` → `[{"mensaje": "pong"}]`; `diagnosticar`, `registrar_vehiculo` y
+  `consultar_vehiculo` (abajo); `catalogo_sintomas`, `marcar_sintoma`, `quitar_sintoma`,
+  `limpiar_sintomas`, `fijar_seleccion`, `resolver_contradiccion` y `cancelar_contradiccion`
+  («Síntomas y contradicciones»); `guardar_diagnostico`, `listar_diagnosticos` y
+  `cargar_diagnostico` (historial, F10); `explicar` (F08).
 
 ### `diagnosticar`
 
@@ -69,10 +77,29 @@ id `hall_<prueba>`): `normal | leve | severo`; se aplican cuando el ciclo recomi
 (`hallazgos_no_aplicados` lista los que no se pidieron). Sin síntomas → `sin_resultados`.
 Un resultado (`resultados[0]`): `concluyente`, `motivo` (`sin_inciertos`, `max_iteraciones`,
 `prueba_pendiente`, `sin_pruebas`, `contradiccion`), `iteraciones`, `componentes`
-(`id, nombre, probabilidad, estado`), `acciones` (`relevancia`), `pruebas_sugeridas`,
-`explicacion`, `traza` (apilar / prueba / rb1 / rb3), `pruebas_hechas`. Un resultado no
+(`id, nombre, sistema, probabilidad, estado`), `max_iteraciones`, `acciones` (`relevancia`),
+`pruebas_sugeridas`, `explicacion`, `traza` (apilar / prueba / rb1 / rb3 / rb2), `pruebas_hechas`. Un resultado no
 concluyente no es un error: pide la prueba de `pruebas_sugeridas[0]`; el cliente la repite con
 su hallazgo. Solo se investigan los inciertos con evidencia y P ≥ `tau_candidato` (0,25).
+
+### Síntomas y contradicciones (F05, F11)
+
+La selección de síntomas (memoria de trabajo X) vive en Prolog; el cliente C solo dibuja lo que
+Prolog devuelve y, si swipl se reabre, la reenvía con `fijar_seleccion`.
+
+- `catalogo_sintomas` (sin args) → una lista de `{sistema, sintomas: [{id, nombre}]}`, solo síntomas
+  (los `hall_*` entran con el resultado de una prueba). El catálogo sale de la KB en cada petición.
+  El sistema de cada síntoma se deduce de la KB (`backend/sistemas.pl`).
+- `marcar_sintoma {id, estado}` (`presente | ausente | desconocido`; `desconocido` no entra al
+  cálculo) → `[{seleccion: [{id, nombre, estado}], contradiccion}]`. Si el síntoma choca con otro
+  presente (R2b, `incompatibilidad/2`) Prolog hace **RB2**: restaura X al snapshot anterior y
+  `contradiccion` trae `{par: [{id, nombre}, {id, nombre}], entrada, restaurado: true, mensaje}`; si no,
+  `contradiccion` es `null`.
+- `resolver_contradiccion {elegido}`: solo uno de los dos del par (`eleccion_invalida`); el otro se
+  descarta y el elegido vuelve a R2 (puede devolver otra contradicción). `cancelar_contradiccion`
+  conserva el estado anterior. Ambas devuelven `{seleccion, contradiccion}`.
+- `quitar_sintoma {id}`, `limpiar_sintomas`, `fijar_seleccion {sintomas: {id: estado}}` (todo o nada;
+  rechaza una selección con contradicción) devuelven `{seleccion, contradiccion: null}`.
 
 ### `registrar_vehiculo` / `consultar_vehiculo`
 
@@ -142,3 +169,14 @@ primeros problemas.
 
 `make test` corre las pruebas Prolog (`pruebas/pruebas_prolog.pl`) y las del controlador en C
 (`pruebas/pruebas_controlador.c`, incluido un servidor con la KB rota).
+
+## Integración de F05, F06, F11 y F12
+
+Qué se añadió y qué se tocó en F00–F04, y las decisiones de diseño a revisar:
+`documentacion/integracion_f05_f06_f11_f12.md`. Los 15 casos de prueba con entradas, expectativas,
+resultados y evidencia: `pruebas/casos_prueba.txt`. Demo sin interfaz interactiva:
+
+```
+./sistema_experto --pantalla diagnostico --accion marcar:chirrido_frenos=presente \
+    --accion marcar:pedal_freno_esponjoso=presente --accion diagnosticar --captura salida.bmp
+```
