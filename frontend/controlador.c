@@ -117,7 +117,7 @@ static void reponer_sesion(Controlador *k) {
         cJSON *r;
         llamar_crudo(k, "diagnosticar", args_diagnostico(k), &r);
         cJSON_Delete(r);
-        k->rec_al_dia = k->acc_al_dia = 0;
+        k->rec_al_dia = k->acc_al_dia = k->expl_al_dia = 0;
     }
 }
 
@@ -260,6 +260,7 @@ static void enviar_seleccion(Controlador *k, const char *op, cJSON *args) {
         k->aviso_diag[0] = '\0';
         k->hay_rec = k->rec_al_dia = 0;  /* F07: tampoco las pruebas recomendadas */
         k->hay_acc = k->acc_al_dia = 0;  /* F09: ni las acciones */
+        k->hay_expl = k->expl_al_dia = 0;  /* F08: ni la explicación */
     } else if (l == LL_ERR_PROLOG) {     /* RNF-02: la selección previa no se altera */
         texto(k->aviso, sizeof k->aviso, k->mensaje);
     }
@@ -318,8 +319,10 @@ void controlador_diagnosticar(Controlador *k) {
     k->aviso_diag[0] = '\0';
     k->hay_rec = k->rec_al_dia = 0;      /* F07: las pruebas se vuelven a pedir para el nuevo */
     k->hay_acc = k->acc_al_dia = 0;      /* F09: las acciones también */
+    k->hay_expl = k->expl_al_dia = 0;    /* F08: y la explicación */
     k->aviso_pruebas[0] = '\0';
     k->aviso_acc[0] = '\0';
+    k->aviso_expl[0] = '\0';
     if (!k->catalogo_ok) {
         aviso_diag(k, 1, "No hay catálogo de síntomas: no se puede diagnosticar.");
         return;
@@ -434,7 +437,7 @@ int controlador_registrar_resultado(Controlador *k, const char *prueba, const ch
         return 1;
     }
     k->hay_diag = 1;
-    k->acc_al_dia = 0;                   /* F09: las acciones cambian con el diagnóstico nuevo */
+    k->acc_al_dia = k->expl_al_dia = 0;  /* F08/F09: cambian con el diagnóstico nuevo */
     k->aviso_diag[0] = '\0';
     char nombre[NOMBRE_LEN];
     texto(nombre, sizeof nombre, k->rec.pendiente.nombre);
@@ -445,6 +448,41 @@ int controlador_registrar_resultado(Controlador *k, const char *prueba, const ch
         aviso_pruebas(k, 0, m);
     }
     return 1;
+}
+
+/* ---------------------------------------------------------------- F08 ---- */
+
+static void aviso_expl(Controlador *k, int es_error, const char *txt) {
+    k->aviso_expl_error = es_error;
+    texto(k->aviso_expl, sizeof k->aviso_expl, txt);
+}
+
+void controlador_explicar(Controlador *k) {
+    char err[256] = "";
+    k->expl_al_dia = 1;                  /* un intento por diagnóstico; el botón Actualizar repite */
+    k->hay_expl = 0;
+    k->aviso_expl[0] = '\0';
+    if (!k->hay_diag) {                  /* RNF-01: sin diagnóstico calculado no se pide la traza */
+        aviso_expl(k, 0, "Primero genere un diagnóstico.");
+        return;
+    }
+    cJSON *resp;
+    Llamada l = llamar(k, "explicar", NULL, &resp);
+    if (l == LL_OK) {
+        if (explicacion_parsear(&k->expl, cJSON_GetObjectItemCaseSensitive(resp, "resultados"),
+                                err, sizeof err) < 0) {
+            char m[600];
+            snprintf(m, sizeof m, "No se puede mostrar la explicación: %s", err);
+            aviso_expl(k, 1, m);
+        } else {
+            k->hay_expl = 1;
+        }
+    } else if (l == LL_SIN_RES) {
+        aviso_expl(k, 1, "No se puede mostrar la explicación: la traza está vacía");
+    } else {
+        aviso_expl(k, 1, k->mensaje);    /* RNF-02: el error se muestra sin romper la pantalla */
+    }
+    cJSON_Delete(resp);
 }
 
 /* ---------------------------------------------------------------- F09 ---- */
@@ -521,6 +559,7 @@ int controlador_accion(Controlador *k, const char *accion) {
     else if (!strcmp(buf, "cancelar"))         controlador_cancelar_contradiccion(k);
     else if (!strcmp(buf, "recomendar"))       controlador_recomendar_pruebas(k);
     else if (!strcmp(buf, "acciones"))         controlador_acciones(k);
+    else if (!strcmp(buf, "explicar"))         controlador_explicar(k);
     else if (!strcmp(buf, "matar")) {          /* simula la caída de swipl */
         if (k->con.pid > 0) { kill(k->con.pid, SIGKILL); usleep(150000); }
     } else if (!strcmp(buf, "quitar") && arg)  controlador_quitar(k, arg);

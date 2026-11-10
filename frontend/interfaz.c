@@ -444,6 +444,115 @@ static void pantalla_pruebas(struct nk_context *ctx, Controlador *k) {
     }
 }
 
+/* ----------------------------------------------------------------------- F08 ---- */
+
+/* Párrafo con salto de línea: el alto de la fila se calcula midiendo el texto con la fuente
+ * (nk_label_wrap necesita un alto fijo y los textos de Prolog tienen largo variable). */
+static void parrafo(struct nk_context *ctx, const char *txt, struct nk_color col) {
+    const struct nk_user_font *f = ctx->style.font;
+    float ancho = nk_window_get_content_region(ctx).w - 24;
+    float total = f->width(f->userdata, f->height, txt, (int)strlen(txt));
+    int lineas = ancho > 40 ? (int)(total * 1.12f / ancho) + 1 : 1;   /* margen por el corte de palabras */
+    nk_layout_row_dynamic(ctx, lineas * (f->height + 4) + 4, 1);
+    nk_label_colored_wrap(ctx, txt, col);
+}
+
+static struct nk_color color_regla(const char *r) {
+    if (!strncmp(r, "RB", 2)) return AMBAR;                   /* retrocesos RB1, RB2, RB3 */
+    if (!strcmp(r, "R10") || !strcmp(r, "R9")) return VERDE;  /* aportes y acciones */
+    if (!strcmp(r, "R2b")) return ROJO;
+    return nk_rgb(215, 215, 215);
+}
+
+/* Traza: un nodo desplegable por iteración, con sus eventos en orden cronológico. */
+static void traza_por_iteracion(struct nk_context *ctx, const Explicacion *x) {
+    int max = explicacion_max_iteracion(x);
+    for (int it = 0; it <= max; it++) {
+        int n = 0;
+        for (int i = 0; i < x->n_traza; i++) n += x->traza[i].iteracion == it;
+        if (n == 0) continue;
+        char tit[64];
+        if (it == 0) snprintf(tit, sizeof tit, "Antes de las pruebas (iteración 0)");
+        else         snprintf(tit, sizeof tit, "Iteración %d", it);
+        if (nk_tree_push_id(ctx, NK_TREE_NODE, tit, NK_MAXIMIZED, it)) {
+            for (int i = 0; i < x->n_traza; i++)
+                if (x->traza[i].iteracion == it) parrafo(ctx, x->traza[i].texto, color_regla(x->traza[i].regla));
+            nk_tree_pop(ctx);
+        }
+    }
+}
+
+/* Por componente: los confirmados abiertos (con sus síntomas de mayor aporte); el resto plegado. */
+static void explicacion_componentes(struct nk_context *ctx, const Explicacion *x, int confirmados) {
+    int n = 0;
+    for (int i = 0; i < x->n_comps; i++) {
+        const ExplComponente *c = &x->comps[i];
+        if ((c->estado == COMP_CONFIRMADO) != confirmados) continue;
+        char tit[NOMBRE_LEN + 48];
+        snprintf(tit, sizeof tit, "%s: %.1f %% (%s)", c->nombre, c->probabilidad * 100.0, estado_comp_texto(c->estado));
+        nk_layout_row_dynamic(ctx, 24, 1);
+        nk_label_colored(ctx, tit, NK_TEXT_LEFT, color_estado(c->estado));
+        parrafo(ctx, c->texto, nk_rgb(200, 200, 200));
+        n++;
+    }
+    if (n == 0) {
+        nk_layout_row_dynamic(ctx, 24, 1);
+        nk_label_colored(ctx, confirmados ? "Ningún componente quedó confirmado." : "No hay otros componentes.",
+                         NK_TEXT_LEFT, GRIS);
+    }
+}
+
+static void explicacion_items(struct nk_context *ctx, const ExplItem *it, int n, const char *vacio) {
+    if (n == 0) {
+        nk_layout_row_dynamic(ctx, 24, 1);
+        nk_label_colored(ctx, vacio, NK_TEXT_LEFT, GRIS);
+    }
+    for (int i = 0; i < n; i++) parrafo(ctx, it[i].texto, nk_rgb(200, 200, 200));
+}
+
+/* F08 · paso 15: por qué el sistema llegó a su conclusión (traza R2-R10 y retrocesos). */
+static void pantalla_explicacion(struct nk_context *ctx, Controlador *k) {
+    if (k->hay_diag && !k->expl_al_dia) controlador_explicar(k);   /* al entrar o si cambió */
+    nk_layout_row_dynamic(ctx, 34, 1);
+    if (nk_button_label(ctx, "Actualizar explicación")) controlador_explicar(k);
+    if (k->aviso_expl[0]) {              /* RNF-02: error o traza vacía, sin romper la pantalla */
+        nk_layout_row_dynamic(ctx, 60, 1);
+        nk_label_colored_wrap(ctx, k->aviso_expl, k->aviso_expl_error ? ROJO : AMBAR);
+    }
+    if (!k->hay_expl) return;
+    const Explicacion *x = &k->expl;
+    nk_layout_row_dynamic(ctx, 36, 1);
+    insignia(ctx, k->diag.concluyente ? "DIAGNÓSTICO CONCLUYENTE" : "DIAGNÓSTICO NO CONCLUYENTE",
+             k->diag.concluyente ? VERDE : AMBAR);
+    parrafo(ctx, x->conclusion, k->diag.concluyente ? VERDE : AMBAR);
+    float alto = nk_window_get_content_region(ctx).h - 30 - 34 - 36 - 70 - (k->aviso_expl[0] ? 64.0f : 0.0f);
+    if (alto < 240) alto = 240;
+    nk_layout_row_dynamic(ctx, alto, 1);
+    if (nk_group_begin(ctx, "Razonamiento", NK_WINDOW_BORDER)) {
+        if (nk_tree_push(ctx, NK_TREE_TAB, "Resumen por componente confirmado", NK_MAXIMIZED)) {
+            explicacion_componentes(ctx, x, 1);
+            nk_tree_pop(ctx);
+        }
+        if (nk_tree_push(ctx, NK_TREE_TAB, "Traza del razonamiento (por iteración)", NK_MAXIMIZED)) {
+            traza_por_iteracion(ctx, x);
+            nk_tree_pop(ctx);
+        }
+        if (nk_tree_push(ctx, NK_TREE_TAB, "Por qué se recomiendan las acciones", NK_MINIMIZED)) {
+            explicacion_items(ctx, x->acciones, x->n_acciones, "No hay acciones: ningún componente confirmado.");
+            nk_tree_pop(ctx);
+        }
+        if (nk_tree_push(ctx, NK_TREE_TAB, "Por qué se sugieren las pruebas", NK_MINIMIZED)) {
+            explicacion_items(ctx, x->pruebas, x->n_pruebas, "No quedan pruebas sugeridas.");
+            nk_tree_pop(ctx);
+        }
+        if (nk_tree_push(ctx, NK_TREE_TAB, "Otros componentes (inciertos y descartados)", NK_MINIMIZED)) {
+            explicacion_componentes(ctx, x, 0);
+            nk_tree_pop(ctx);
+        }
+        nk_group_end(ctx);
+    }
+}
+
 /* ----------------------------------------------------------------------- F09 ---- */
 
 /* Una acción: nombre, barra de Ra con su porcentaje y los confirmados que la originan. */
@@ -525,7 +634,7 @@ static void dialogo_contradiccion(struct nk_context *ctx, Controlador *k, int w,
     }
 }
 
-/* Contenido de cada pantalla; Explicación (F08) y Reporte (F13) siguen pendientes. */
+/* Contenido de cada pantalla; Reporte (F13) sigue pendiente. */
 static void pantalla(struct nk_context *ctx, Controlador *k, Menu *m) {
     nk_layout_row_dynamic(ctx, 30, 1);
     nk_label(ctx, menu_titulo(m->actual), NK_TEXT_LEFT);
@@ -537,6 +646,7 @@ static void pantalla(struct nk_context *ctx, Controlador *k, Menu *m) {
     if (m->actual == PANT_DIAGNOSTICO) { pantalla_diagnostico(ctx, k, m); return; }
     if (m->actual == PANT_PRUEBAS) { pantalla_pruebas(ctx, k); return; }
     if (m->actual == PANT_ACCIONES) { pantalla_acciones(ctx, k, m); return; }
+    if (m->actual == PANT_EXPLICACION) { pantalla_explicacion(ctx, k); return; }
     nk_label_wrap(ctx, "Pantalla pendiente de implementar.");
 }
 

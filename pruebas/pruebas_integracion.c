@@ -380,12 +380,69 @@ static void n7_acciones_error(void) {
     controlador_cerrar(&k);
 }
 
+static int en_traza(const Explicacion *x, const char *regla, const char *texto) {
+    for (int i = 0; i < x->n_traza; i++)
+        if (!strcmp(x->traza[i].regla, regla) && (!texto || strstr(x->traza[i].texto, texto))) return 1;
+    return 0;
+}
+
+static void i8_explicacion(void) {
+    puts("I8 · F08: explicar con swipl real (PDF §6 y RB2)");
+    Controlador k; listo(&k, SERVIDOR);
+    controlador_explicar(&k);
+    CHECK(!k.hay_expl && strstr(k.aviso_expl, "Primero genere un diagnóstico"), "sin diagnóstico: mensaje y no se pide");
+    sintomas_pdf(&k);
+    controlador_hallazgo(&k, "hall_medir_espesor_pastillas_freno", "normal");
+    controlador_hallazgo(&k, "hall_revisar_nivel_estado_liquido_frenos", "severo");
+    controlador_hallazgo(&k, "hall_inspeccionar_disco_rayaduras_alabeo", "normal");
+    controlador_diagnosticar(&k);
+    controlador_explicar(&k);
+    CHECK(k.hay_expl && k.expl.n_traza >= 8 && k.expl.conclusion[0], "traza y conclusión del caso del PDF");
+    CHECK(en_traza(&k.expl, "R7-R8", "baja de 63,3 % a 3,9 %"), "Pastillas baja de 63 % a 3,9 %");
+    CHECK(en_traza(&k.expl, "R10", "+2,2") && en_traza(&k.expl, "R10", "+2,8"), "aportes +2,2 y +2,8 (R10)");
+    CHECK(en_traza(&k.expl, "RB1", NULL) && en_traza(&k.expl, "RB3", NULL), "la traza incluye RB1 y RB3");
+    CHECK(explicacion_max_iteracion(&k.expl) == 3, "agrupable en 3 iteraciones");
+    int conf = 0;
+    for (int i = 0; i < k.expl.n_comps; i++) conf += k.expl.comps[i].estado == COMP_CONFIRMADO;
+    CHECK(conf == 1 && k.expl.n_acciones == 2, "un confirmado (Líquido) y sus dos acciones");
+    controlador_cerrar(&k);
+
+    listo(&k, SERVIDOR);
+    controlador_marcar(&k, "no_arranca", EST_PRESENTE);
+    controlador_marcar(&k, "ralenti_inestable", EST_PRESENTE);
+    controlador_resolver(&k, "no_arranca");
+    controlador_diagnosticar(&k);
+    controlador_explicar(&k);
+    CHECK(k.hay_expl && !strcmp(k.expl.traza[0].regla, "RB2") && en_traza(&k.expl, "RB2", "eligió"),
+          "la contradicción resuelta (RB2) aparece al inicio de la traza");
+    controlador_cerrar(&k);
+}
+
+static void n8_explicacion_error(void) {
+    puts("N8 · F08: error al pedir la explicación, sin romper la pantalla");
+    Controlador k; listo(&k, SERVIDOR);
+    sintomas_pdf(&k);
+    controlador_diagnosticar(&k);
+    controlador_explicar(&k);
+    CHECK(k.hay_expl, "explicación del diagnóstico");
+    controlador_accion(&k, "matar");
+    controlador_explicar(&k);
+    CHECK(!k.hay_expl && k.aviso_expl_error && k.hay_error, "con swipl caído: aviso de error y nada que dibujar");
+    controlador_cerrar(&k);
+    k.hay_error = 0;
+    controlador_probar_conexion(&k);
+    controlador_explicar(&k);
+    CHECK(!k.hay_error && k.hay_expl, "al reconectar la explicación vuelve a funcionar");
+    controlador_cerrar(&k);
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     if (!conexion_swipl_disponible()) { puts("Falta swipl."); return 1; }
     i1_catalogo(); i2_seleccion(); i3_diagnosticar(); i4_rb1_rb3(); i5_rb2();
     n1_validacion(); n2_json_malformado(); n3_swipl_caido(); n4_kb_invalida(); n5_sin_hipotesis();
     i6_pruebas(); n6_pruebas_tras_caida(); i7_acciones(); n7_acciones_error();
+    i8_explicacion(); n8_explicacion_error();
     printf("\npruebas_integracion: %d verificaciones, %d fallos\n", total, fallos);
     return fallos ? 1 : 0;
 }

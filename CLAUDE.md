@@ -30,8 +30,9 @@ Pendiente: botón «Guardar» (en la pantalla Diagnóstico de F06) y lista del h
 Hecho (backend): backend/explicaciones.pl (`explicar/3`: traza evento(Iteracion, Regla, Datos) con texto, reconstruyendo X
 paso a paso desde la traza del motor; explicación por componente, acciones con su origen, pruebas sugeridas, conclusión);
 op `explicar` (último diagnóstico o `{"id": N}` guardado). Textos con números de la KB (coma decimal).
-Pendiente: narrar en la traza los eventos rb2 de F11 (ya vienen en `diagnosticar` y en retroceso:registro_rb/1);
-panel de traza en la interfaz C.
+Hecho (feature/f08-panel-explicacion): RB2 en la traza (historial:recordar_diagnostico guarda retroceso:registro_rb en
+la clave `rb2` del resultado); frontend/explicacion.c (valida; traza vacía = error), controlador_explicar, pantalla
+Explicación con nodos por iteración y resumen por confirmado; `make capturas` f08_*.
 Nota SWI 9.0 (Ubuntu): no autocarga library(http/json) (por eso el import en pruebas_prolog.pl) y `diagnosticar`
 deja un punto de elección (avisos «succeeded with choicepoint» en pruebas de F02 y F05).
 # Estado de F07 (issue #59, rama feature/f07-pruebas-adicionales)
