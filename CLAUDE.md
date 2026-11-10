@@ -3,7 +3,7 @@ NO USAR la skill/harness tdd-sdd (ni /start-dev, tdd-cycle, ni los agentes redac
 # Sistema experto de diagnóstico automotriz
 - Backend Prolog (`backend/hechos.pl` = KB, `backend/servidor_json.pl` = servidor), front en C (Nuklear+SDL2). Contrato JSON en README.md.
 - `make test` corre las pruebas Prolog (`pruebas/pruebas_prolog.pl`).
-- Commits: `feat(F0N): ...` con `Refs #<issue>` (F01 → #54, F02 → #55, F03 → #65, F04 → #56, F08 → #60, F10 → #62). Una rama por feature: F01 en feature/f01-base-conocimiento, F02 en feature/f02-motor-inferencia (crearla ANTES de commitear).
+- Commits: `feat(F0N): ...` con `Refs #<issue>` (F01 → #54, F02 → #55, F03 → #65, F04 → #56, F07 → #59, F08 → #60, F10 → #62). Una rama por feature: F01 en feature/f01-base-conocimiento, F02 en feature/f02-motor-inferencia (crearla ANTES de commitear).
 - Después de CADA paso: generar tests (en `pruebas/pruebas_prolog.pl`) y verificar que pasen con `make test` (exit 0, sin FAILED ni Warning) antes de commitear.
 
 # Estado de F01 (issue #54)
@@ -34,3 +34,8 @@ Pendiente: narrar en la traza los eventos rb2 de F11 (ya vienen en `diagnosticar
 panel de traza en la interfaz C.
 Nota SWI 9.0 (Ubuntu): no autocarga library(http/json) (por eso el import en pruebas_prolog.pl) y `diagnosticar`
 deja un punto de elección (avisos «succeeded with choicepoint» en pruebas de F02 y F05).
+# Estado de F07 (issue #59, rama feature/f07-pruebas-adicionales)
+Hecho (backend): backend/pruebas_adicionales.pl, ops `recomendar_pruebas` (pendiente, otras, realizadas, mensaje) y
+`registrar_resultado_prueba {prueba, resultado}` (reejecuta el ciclo con el hallazgo y recuerda el nuevo diagnóstico).
+Decisión: solo se registra la prueba pendiente (el motor aplica un hallazgo solo cuando R7 pide esa prueba).
+Pendiente: pantalla Pruebas en C (debe llamar también a `controlador_hallazgo` para que Diagnosticar lo conserve).
