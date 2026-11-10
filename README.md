@@ -145,9 +145,11 @@ Justifica el diagnóstico con textos generados desde la KB (`backend/explicacion
 Sin args explica el último `diagnosticar`; con `{"id": N}`, uno guardado en el historial.
 `resultados[0]`:
 - `conclusion`: texto final (concluyente o no; siempre aclara que es una hipótesis).
-- `traza`: eventos en orden cronológico, cada uno con `iteracion`, `regla` (`R2-R5`, `R2b`, `R7`,
+- `traza`: eventos en orden cronológico, cada uno con `iteracion`, `regla` (`RB2`, `R2-R5`, `R2b`, `R7`,
   `R7-R8`, `RB1`, `RB3`, `R6`, `R9`, `R10`), `texto` y `datos` (los números, p. ej. la prueba
-  `{"foco", "prueba", "resultado", "antes", "despues", "aporte"}`).
+  `{"foco", "prueba", "resultado", "antes", "despues", "aporte"}`). Los `RB2` del inicio son las
+  contradicciones resueltas o canceladas al marcar los síntomas (F11): el servidor las guarda con el
+  diagnóstico en la clave `rb2`, así que también salen al explicar uno del historial.
   Ej.: «Iteración 1 (R7-R8): foco «Pastillas de freno» (63,3 %)… baja de 63,3 % a 3,9 %».
 - `explicacion`: por componente (`componente, nombre, probabilidad, estado, texto`): por qué se
   confirma (prior y síntomas que más aportaron al logit), se descarta o sigue incierto.

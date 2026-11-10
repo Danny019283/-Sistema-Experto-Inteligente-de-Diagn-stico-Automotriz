@@ -1389,3 +1389,59 @@ test(acciones_sin_simbolos_especiales, [setup(limpio_a(_)), cleanup(restaurar_a(
     with_output_to(string(S), json_write_dict(current_output, X, [width(0)])),
     forall(member(C, ["«", "»", "≤", "≥", "×"]), \+ sub_string(S, _, _, _, C)).
 :- end_tests(acciones_correctivas).
+
+% ---------------------------------------------------------------------------
+% F08 + F11: la traza narra los retrocesos RB2 hechos al marcar síntomas (también desde el historial).
+% ---------------------------------------------------------------------------
+:- begin_tests(explicacion_rb2).
+:- use_module('../backend/historial').
+:- use_module('../backend/retroceso').
+:- use_module('../backend/memoria_x').
+pedir_r(Op, Args, R) :-
+    format(string(L), "{\"id\":4,\"op\":\"~w\",\"args\":~s}", [Op, Args]), once(procesar_linea(L, R)).
+limpio_r(_) :- historial:ruta_registros(Def), nb_setval(ruta_r, Def),
+    tmp_file(registros, B), atom_concat(B, '/datos/registros.txt', Ruta), usar_registros(Ruta),
+    retroceso:reiniciar, memoria_x:x_limpiar.
+restaurar_r(_) :- nb_getval(ruta_r, Def), usar_registros(Def),
+    retroceso:reiniciar, memoria_x:x_limpiar, retractall(vehiculo:vehiculo(_, _, _, _, _, _)).
+marcar_r(Id) :- format(string(A), "{\"id\":\"~w\",\"estado\":\"presente\"}", [Id]), pedir_r(marcar_sintoma, A, _).
+contradiccion_resuelta :-
+    marcar_r(no_arranca), marcar_r(ralenti_inestable),
+    pedir_r(resolver_contradiccion, "{\"elegido\":\"no_arranca\"}", R), R.estado == ok,
+    pedir_r(diagnosticar, "{\"sintomas\":{\"no_arranca\":\"presente\"}}", D), D.estado == ok.
+traza_r(Args, Traza) :- pedir_r(explicar, Args, R), R.estado == ok, R.resultados = [X], Traza = X.traza.
+reglas_r(Traza, Rs) :- findall(G, ( member(E, Traza), G = E.regla ), Rs).
+tiene_r(T, P) :- once(sub_string(T, _, _, _, P)).
+
+test(rb2_resuelta_en_la_traza, [setup(limpio_r(_)), cleanup(restaurar_r(_))]) :-
+    contradiccion_resuelta, traza_r("{}", T),
+    T = [E1, E2, E3|_], E1.regla == 'RB2', E2.regla == 'RB2', E3.regla == 'R2-R5',
+    tiene_r(E1.texto, "incompatible con \"El motor no arranca\""),
+    tiene_r(E1.texto, "se restauró"), E1.datos.restaurado == true,
+    tiene_r(E2.texto, "el usuario eligió \"El motor no arranca\""),
+    E2.datos.descartado == ralenti_inestable.
+test(rb2_cancelada_en_la_traza, [setup(limpio_r(_)), cleanup(restaurar_r(_))]) :-
+    marcar_r(no_arranca), marcar_r(ralenti_inestable),
+    pedir_r(cancelar_contradiccion, "{}", _),
+    pedir_r(diagnosticar, "{\"sintomas\":{\"no_arranca\":\"presente\"}}", _),
+    traza_r("{}", T), T = [_, E2|_], E2.regla == 'RB2',
+    tiene_r(E2.texto, "canceló"), tiene_r(E2.texto, "Ralentí inestable").
+test(sin_contradicciones_no_hay_rb2, [setup(limpio_r(_)), cleanup(restaurar_r(_))]) :-
+    marcar_r(chirrido_frenos),
+    pedir_r(diagnosticar, "{\"sintomas\":{\"chirrido_frenos\":\"presente\"}}", _),
+    historial:diagnostico_actual(_, Res), \+ get_dict(rb2, Res, _),
+    traza_r("{}", T), reglas_r(T, Rs), \+ memberchk('RB2', Rs).
+test(rb2_se_conserva_en_el_historial, [setup(limpio_r(_)), cleanup(restaurar_r(_))]) :-
+    pedir_r(registrar_vehiculo, "{\"marca\":\"Toyota\",\"modelo\":\"Corolla\",\"anio\":2015,\"cilindrada\":\"1.8 L\",\"combustible\":\"gasolina\",\"kilometraje\":120000}", V),
+    V.estado == ok,
+    contradiccion_resuelta,
+    pedir_r(guardar_diagnostico, "{}", G), G.estado == ok, G.resultados = [S], Id = S.id,
+    retroceso:reiniciar,                                  % el registro en memoria ya no está
+    historial:ruta_registros(Ruta), usar_registros(Ruta), cargar_registros(_),
+    format(string(A), "{\"id\":~w}", [Id]), traza_r(A, T),
+    reglas_r(T, Rs), Rs = ['RB2', 'RB2'|_].
+test(contradiccion_directa_narra_rb2, [setup(limpio_r(_)), cleanup(restaurar_r(_))]) :-
+    pedir_r(diagnosticar, "{\"sintomas\":{\"no_arranca\":\"presente\",\"ralenti_inestable\":\"presente\"}}", _),
+    traza_r("{}", T), reglas_r(T, ['R2b', 'RB2', 'R6']),
+    T = [_, E|_], tiene_r(E.texto, "el usuario debe elegir").
+:- end_tests(explicacion_rb2).
