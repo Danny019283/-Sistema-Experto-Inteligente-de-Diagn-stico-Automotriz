@@ -12,7 +12,7 @@ TEST_C2 := pruebas/pruebas_c
 TEST_IN := pruebas/pruebas_integracion
 # Todo el front-end que no necesita SDL: lo comparten las pruebas del controlador y las de integración.
 TEST_LIB := frontend/controlador.c frontend/menu.c frontend/validaciones.c frontend/vehiculo.c \
-            frontend/sintomas.c frontend/diagnostico.c frontend/pruebas_adicionales.c frontend/acciones.c frontend/explicacion.c integracion/conexion.c integracion/vendor/cJSON.c
+            frontend/sintomas.c frontend/diagnostico.c frontend/pruebas_adicionales.c frontend/acciones.c frontend/explicacion.c frontend/historial.c integracion/conexion.c integracion/vendor/cJSON.c
 TEST_CFLAGS := -std=gnu11 -Wall -Wextra -w -Ifrontend -Iintegracion -Iintegracion/vendor
 
 .PHONY: build run test clean deps capturas calibrar
@@ -37,7 +37,7 @@ test:
 	LANG=C.UTF-8 swipl -q -g run_tests -t halt pruebas/pruebas_prolog.pl
 	$(CC) $(TEST_CFLAGS) -o $(TEST_C) $(TEST_C).c $(TEST_LIB) -lm
 	./$(TEST_C) backend/servidor_json.pl pruebas/servidor_kb_rota.pl 2>/dev/null
-	$(CC) $(TEST_CFLAGS) -o $(TEST_C2) $(TEST_C2).c frontend/sintomas.c frontend/diagnostico.c frontend/pruebas_adicionales.c frontend/acciones.c frontend/explicacion.c integracion/vendor/cJSON.c -lm
+	$(CC) $(TEST_CFLAGS) -o $(TEST_C2) $(TEST_C2).c frontend/sintomas.c frontend/diagnostico.c frontend/pruebas_adicionales.c frontend/acciones.c frontend/explicacion.c frontend/historial.c frontend/vehiculo.c frontend/validaciones.c integracion/vendor/cJSON.c -lm
 	./$(TEST_C2)
 	$(CC) $(TEST_CFLAGS) -o $(TEST_IN) $(TEST_IN).c $(TEST_LIB) -lm
 	LANG=C.UTF-8 ./$(TEST_IN)
@@ -57,10 +57,13 @@ calibrar:
 
 # Capturas de pantalla reproducibles (evidencia F12) con la KB real. Necesitan display
 # (xvfb-run si no hay uno). Salida: pruebas/evidencia/*.bmp
-CAP := ./$(BIN)
+# SE_REGISTROS: el historial de las capturas va a un archivo aparte, no a datos/registros.txt (F10).
 EVD := pruebas/evidencia
+CAP := SE_REGISTROS=$(EVD)/registros_capturas.txt ./$(BIN)
+VEH := --accion vehiculo:Toyota,Corolla,2015,1.8\ L,gasolina,120000
 capturas: build
 	@mkdir -p $(EVD)
+	@rm -f $(EVD)/registros_capturas.txt
 	$(CAP) --pantalla sintomas --accion marcar:chirrido_frenos=presente --accion marcar:pedal_freno_esponjoso=ausente \
 	  --accion marcar:luz_check_engine=desconocido --captura $(EVD)/f05_seleccion_estados.bmp
 	$(CAP) --pantalla diagnostico --accion marcar:chirrido_frenos=presente --accion marcar:pedal_freno_esponjoso=presente \
@@ -91,6 +94,15 @@ capturas: build
 	  --accion diagnosticar --accion explicar --captura $(EVD)/f08_explicacion.bmp
 	$(CAP) --pantalla explicacion --accion marcar:no_arranca=presente --accion marcar:ralenti_inestable=presente \
 	  --accion resolver:no_arranca --accion diagnosticar --accion explicar --captura $(EVD)/f08_explicacion_rb2.bmp
+	$(CAP) --pantalla diagnostico $(VEH) --accion marcar:chirrido_frenos=presente \
+	  --accion marcar:pedal_freno_esponjoso=presente --accion diagnosticar --accion guardar \
+	  --captura $(EVD)/f10_guardado.bmp
+	$(CAP) --pantalla historial $(VEH) --accion marcar:chirrido_frenos=presente --accion marcar:pedal_freno_esponjoso=presente \
+	  --accion hallazgo:hall_medir_espesor_pastillas_freno=normal \
+	  --accion hallazgo:hall_revisar_nivel_estado_liquido_frenos=severo \
+	  --accion hallazgo:hall_inspeccionar_disco_rayaduras_alabeo=normal \
+	  --accion diagnosticar --accion guardar --accion listar --accion abrir:2 --captura $(EVD)/f10_historial.bmp
+	@rm -f $(EVD)/registros_capturas.txt
 	$(CAP) --pantalla sintomas --accion marcar:no_arranca=presente --accion marcar:ralenti_inestable=presente \
 	  --captura $(EVD)/f11_dialogo_rb2.bmp
 	$(CAP) --backend pruebas/servidor_sin_hipotesis.pl --pantalla diagnostico --accion marcar:sin_relacion=presente \

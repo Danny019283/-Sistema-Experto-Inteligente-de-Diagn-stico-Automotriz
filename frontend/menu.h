@@ -5,7 +5,7 @@
  * del dominio vive en Prolog. */
 typedef enum {
     PANT_VEHICULO, PANT_SINTOMAS, PANT_DIAGNOSTICO, PANT_PRUEBAS,
-    PANT_EXPLICACION, PANT_ACCIONES, PANT_REPORTE, PANT_SALIR, PANT_N
+    PANT_EXPLICACION, PANT_ACCIONES, PANT_REPORTE, PANT_HISTORIAL, PANT_SALIR, PANT_N
 } Pantalla;
 
 typedef struct {
@@ -17,7 +17,8 @@ typedef struct {
 
 void menu_iniciar(Menu *m);
 const char *menu_titulo(Pantalla p);
-/* Vehículo, Síntomas y Salir siempre; Diagnóstico con síntomas; el resto con diagnóstico. */
+/* Vehículo, Síntomas, Historial (F10) y Salir siempre; Diagnóstico con síntomas; el resto con
+ * diagnóstico. */
 int menu_habilitada(const Menu *m, Pantalla p);
 /* Cambia de pantalla si está habilitada (no vale para PANT_SALIR); 1 si navegó. */
 int menu_ir(Menu *m, Pantalla p);

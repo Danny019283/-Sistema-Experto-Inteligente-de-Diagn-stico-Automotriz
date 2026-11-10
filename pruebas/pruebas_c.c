@@ -6,6 +6,7 @@
 #include "acciones.h"
 #include "diagnostico.h"
 #include "explicacion.h"
+#include "historial.h"
 #include "pruebas_adicionales.h"
 #include "sintomas.h"
 
@@ -206,6 +207,45 @@ int main(void) {
         cJSON_Delete(j);
         j = cJSON_Parse("[{\"traza\":[],\"explicacion\":[],\"acciones\":[],\"pruebas\":[]}]");
         CHECK(explicacion_parsear(&ex, j, err, sizeof err) < 0, "sin 'conclusion' se rechaza");
+        cJSON_Delete(j);
+    }
+
+    puts("historial (F10, RNF-01: validar antes de mostrar)");
+    {
+        Historial h;
+        DiagGuardado g;
+        memset(&h, 0, sizeof h);
+#define RES(id, pr, p) "{\"id\":" id ",\"fecha\":\"2026-11-10 10:00:00\",\"vehiculo\":\"Toyota Corolla 2015\"," \
+    "\"concluyente\":true,\"motivo\":\"sin_inciertos\",\"iteraciones\":3,\"principal\":" pr ",\"probabilidad\":" p "}"
+        cJSON *j = cJSON_Parse("[" RES("1", "\"Líquido de frenos\"", "0.93") "," RES("2", "null", "null") "]");
+        CHECK(historial_parsear(&h, j, err, sizeof err) == 0 && h.n == 2 && h.items[0].probabilidad == 0.93 &&
+              h.items[1].probabilidad < 0 && !h.items[1].principal[0], "lista válida, con y sin componente principal");
+        cJSON_Delete(j);
+        j = cJSON_Parse("[" RES("1", "\"X\"", "1.5") "]");
+        CHECK(historial_parsear(&h, j, err, sizeof err) < 0 && h.n == 2, "probabilidad fuera de [0, 1] se rechaza sin pisar la lista");
+        cJSON_Delete(j);
+        j = cJSON_Parse("[" RES("0", "null", "null") "]");
+        CHECK(historial_parsear(&h, j, err, sizeof err) < 0, "id no positivo se rechaza");
+        cJSON_Delete(j);
+        j = cJSON_Parse("[]");
+        CHECK(historial_parsear(&h, j, err, sizeof err) == 0 && h.n == 0, "historial vacío");
+        cJSON_Delete(j);
+#define GUARD(res) "[{\"id\":2,\"fecha\":\"2026-11-10 10:00:00\",\"vehiculo\":{\"marca\":\"Toyota\",\"modelo\":\"Corolla\"," \
+    "\"anio\":2015,\"cilindrada\":\"1.8 L\",\"combustible\":\"gasolina\",\"kilometraje\":120000}," \
+    "\"entrada\":{\"chirrido_frenos\":\"presente\"},\"resultado\":" res "}]"
+        j = cJSON_Parse(GUARD("{\"componentes\":[" COMP("a", "0.9", "confirmado") "],\"concluyente\":true,"
+                              "\"motivo\":\"sin_inciertos\",\"iteraciones\":1,\"max_iteraciones\":5}"));
+        CHECK(diagnostico_guardado_parsear(&g, j, err, sizeof err) == 0 && g.id == 2 && g.n_entrada == 1 &&
+              g.diag.n == 1 && g.diag.concluyente && strstr(g.vehiculo, "Toyota Corolla 2015"),
+              "diagnóstico guardado válido (vehículo, entrada y resultado)");
+        cJSON_Delete(j);
+        j = cJSON_Parse(GUARD("{\"componentes\":[" COMP("a", "2", "confirmado") "],\"concluyente\":true,"
+                              "\"motivo\":\"sin_inciertos\",\"iteraciones\":1,\"max_iteraciones\":5}"));
+        CHECK(diagnostico_guardado_parsear(&g, j, err, sizeof err) < 0 && g.id == 2,
+              "el resultado guardado se valida como en F06 y no pisa el anterior");
+        cJSON_Delete(j);
+        j = cJSON_Parse("[{\"id\":3,\"fecha\":\"f\",\"entrada\":{},\"resultado\":{}}]");
+        CHECK(diagnostico_guardado_parsear(&g, j, err, sizeof err) < 0, "sin vehículo se rechaza");
         cJSON_Delete(j);
     }
 

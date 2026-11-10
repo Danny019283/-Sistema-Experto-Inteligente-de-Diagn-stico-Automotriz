@@ -436,13 +436,91 @@ static void n8_explicacion_error(void) {
     controlador_cerrar(&k);
 }
 
+/* F10: todas las pruebas usan este historial temporal (SE_REGISTROS), nunca datos/registros.txt. */
+static char registros_tmp[256];
+
+static void con_vehiculo(Controlador *k) {
+    controlador_accion(k, "vehiculo:Toyota,Corolla,2015,1.8 L,gasolina,120000");
+}
+
+static void i9_historial(void) {
+    puts("I9 · F10: guardar, listar y abrir diagnósticos (historial persistente)");
+    remove(registros_tmp);
+    Controlador k; listo(&k, SERVIDOR);
+    controlador_listar(&k);
+    CHECK(k.hay_hist && k.hist.n == 0 && !k.aviso_hist[0], "historial vacío: lista vacía sin error (el archivo se crea al guardar)");
+    sintomas_pdf(&k);
+    CHECK(!controlador_guardar(&k) && strstr(k.aviso_guardar, "Primero genere un diagnóstico"), "sin diagnóstico no se guarda");
+    controlador_diagnosticar(&k);
+    CHECK(!controlador_guardar(&k) && strstr(k.aviso_guardar, "Registre el vehículo"), "sin vehículo no se guarda");
+    con_vehiculo(&k);
+    CHECK(k.registrado, "vehículo registrado");
+    CHECK(controlador_guardar(&k) && k.guardado_id == 1 && !k.aviso_guardar_error, "se guarda con el número 1");
+    CHECK(!controlador_guardar(&k) && strstr(k.aviso_guardar, "ya está guardado"), "no se guarda dos veces");
+    controlador_hallazgo(&k, "hall_medir_espesor_pastillas_freno", "normal");
+    controlador_hallazgo(&k, "hall_revisar_nivel_estado_liquido_frenos", "severo");
+    controlador_hallazgo(&k, "hall_inspeccionar_disco_rayaduras_alabeo", "normal");
+    controlador_diagnosticar(&k);
+    CHECK(k.guardado_id == 0, "un diagnóstico nuevo vuelve a poder guardarse");
+    Diagnostico generado = k.diag;
+    CHECK(controlador_guardar(&k) && k.guardado_id == 2, "se guarda el concluyente con el número 2");
+    controlador_listar(&k);
+    CHECK(k.hay_hist && k.hist.n == 2 && !k.hist.items[0].concluyente && k.hist.items[1].concluyente,
+          "la lista trae los dos, del más antiguo al más nuevo");
+    CHECK(!strcmp(k.hist.items[1].principal, "Líquido de frenos") && cerca(k.hist.items[1].probabilidad, 0.93, 0.01) &&
+          strstr(k.hist.items[1].vehiculo, "Toyota Corolla 2015"), "resumen: vehículo y componente principal");
+    controlador_cerrar(&k);
+
+    listo(&k, SERVIDOR);                 /* cerrar y reabrir la aplicación */
+    controlador_listar(&k);
+    CHECK(k.hay_hist && k.hist.n == 2, "al reabrir se conservan los diagnósticos guardados");
+    CHECK(controlador_abrir(&k, 2) && k.hay_abierto && k.abierto.id == 2, "abrir un diagnóstico guardado");
+    int igual = k.abierto.diag.n == generado.n && k.abierto.diag.concluyente == generado.concluyente &&
+                k.abierto.diag.iteraciones == generado.iteraciones;
+    for (int i = 0; igual && i < generado.n; i++)
+        igual = !strcmp(k.abierto.diag.comps[i].id, generado.comps[i].id) &&
+                k.abierto.diag.comps[i].prob == generado.comps[i].prob &&
+                k.abierto.diag.comps[i].estado == generado.comps[i].estado;
+    CHECK(igual, "se muestra igual que cuando se generó (componentes, P, estados, iteraciones)");
+    CHECK(k.abierto.n_entrada == 5 && strstr(k.abierto.vehiculo, "1.8 L"), "con su entrada y su vehículo");
+    CHECK(!controlador_abrir(&k, 99) && strstr(k.aviso_hist, "no_encontrado"), "un id inexistente se informa");
+    controlador_cerrar(&k);
+}
+
+static void n9_historial_corrupto(void) {
+    puts("N9 · F10: archivo de historial dañado y error de escritura");
+    FILE *f = fopen(registros_tmp, "a");
+    if (f) { fputs("esto no es un término válido (\n", f); fclose(f); }
+    Controlador k; listo(&k, SERVIDOR);
+    controlador_listar(&k);
+    CHECK(k.hay_hist && k.hist.n == 2 && strstr(k.aviso_hist, "registros_corrupto"),
+          "registros_corrupto: se avisa y se muestran los válidos");
+    CHECK(!k.hay_error && conexion_viva(&k.con), "la aplicación sigue funcionando");
+    controlador_cerrar(&k);
+    /* Error de escritura: el historial apunta a un directorio que no se puede crear. */
+    setenv("SE_REGISTROS", "/proc/sin_permiso/registros.txt", 1);
+    listo(&k, SERVIDOR);
+    sintomas_pdf(&k);
+    controlador_diagnosticar(&k);
+    con_vehiculo(&k);
+    CHECK(!controlador_guardar(&k) && k.aviso_guardar_error && strstr(k.aviso_guardar, "error_escritura"),
+          "error de escritura: se muestra al usuario");
+    CHECK(k.guardado_id == 0 && !k.hay_error, "no queda como guardado y no se cae");
+    controlador_cerrar(&k);
+    setenv("SE_REGISTROS", registros_tmp, 1);
+    remove(registros_tmp);
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
+    snprintf(registros_tmp, sizeof registros_tmp, "/tmp/se_registros_%d.txt", (int)getpid());
+    setenv("SE_REGISTROS", registros_tmp, 1);   /* F10: nunca el historial real */
     if (!conexion_swipl_disponible()) { puts("Falta swipl."); return 1; }
     i1_catalogo(); i2_seleccion(); i3_diagnosticar(); i4_rb1_rb3(); i5_rb2();
     n1_validacion(); n2_json_malformado(); n3_swipl_caido(); n4_kb_invalida(); n5_sin_hipotesis();
     i6_pruebas(); n6_pruebas_tras_caida(); i7_acciones(); n7_acciones_error();
     i8_explicacion(); n8_explicacion_error();
+    i9_historial(); n9_historial_corrupto();
     printf("\npruebas_integracion: %d verificaciones, %d fallos\n", total, fallos);
     return fallos ? 1 : 0;
 }
