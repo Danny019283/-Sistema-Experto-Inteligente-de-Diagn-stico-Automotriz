@@ -4,6 +4,7 @@
 #include "acciones.h"
 #include "conexion.h"
 #include "diagnostico.h"
+#include "explicacion.h"
 #include "pruebas_adicionales.h"
 #include "sintomas.h"
 #include "vehiculo.h"
@@ -56,6 +57,12 @@ typedef struct {
     int acc_al_dia;             /* 0: el diagnóstico cambió y hay que volver a pedirlas */
     char aviso_acc[4096];       /* error de Prolog / respuesta inválida ("" = ninguno) */
     int aviso_acc_error;
+    /* F08 · explicación del diagnóstico actual (traza y porqués, generados en Prolog, R10). */
+    Explicacion expl;
+    int hay_expl;
+    int expl_al_dia;            /* 0: el diagnóstico cambió y hay que volver a pedirla */
+    char aviso_expl[4096];      /* error de Prolog / respuesta inválida ("" = ninguno) */
+    int aviso_expl_error;
     /* F11 · RB2 */
     Contradiccion contra;
 } Controlador;
@@ -94,6 +101,11 @@ void controlador_recomendar_pruebas(Controlador *k);
  * nada y el motivo queda en k->aviso_pruebas. Devuelve 1 si quedó registrado. */
 int controlador_registrar_resultado(Controlador *k, const char *prueba, const char *resultado);
 
+/* ---- F08 · explicación del razonamiento ---- */
+/* RNF-01: solo con un diagnóstico calculado se pide `explicar`; sin él, "Primero genere un
+ * diagnóstico". Un error o una traza vacía quedan en k->aviso_expl sin dibujar nada. */
+void controlador_explicar(Controlador *k);
+
 /* ---- F09 · acciones correctivas ---- */
 /* Pide acciones_correctivas para el diagnóstico actual; sin diagnóstico no llama a Prolog. Con
  * error o respuesta inválida no se muestra nada y el motivo queda en k->aviso_acc. */
@@ -105,7 +117,7 @@ void controlador_cancelar_contradiccion(Controlador *k);
 
 /* Acciones por texto (demos y evidencia de pruebas): "marcar:id=estado", "quitar:id", "limpiar",
  * "catalogo", "diagnosticar", "hallazgo:hall_x=estado", "resolver:id", "cancelar", "matar",
- * "recomendar", "registrar:prueba=resultado" (F07), "acciones" (F09).
+ * "recomendar", "registrar:prueba=resultado" (F07), "acciones" (F09), "explicar" (F08).
  * 0 ok, -1 si es desconocida o está mal formada. */
 int controlador_accion(Controlador *k, const char *accion);
 

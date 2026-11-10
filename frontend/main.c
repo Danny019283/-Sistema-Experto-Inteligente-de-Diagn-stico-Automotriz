@@ -10,12 +10,12 @@
 
 static void uso(const char *prog) {
     fprintf(stderr,
-        "Uso: %s [--backend script.pl] [--pantalla vehiculo|sintomas|diagnostico|pruebas|acciones]\n"
+        "Uso: %s [--backend script.pl] [--pantalla vehiculo|sintomas|diagnostico|pruebas|acciones|explicacion]\n"
         "          [--accion A]... [--captura salida.bmp]\n"
         "  --backend   servidor Prolog a lanzar (por defecto " BACKEND_DIR "/servidor_json.pl)\n"
         "  --accion    acción previa a dibujar (repetible): marcar:id=estado, quitar:id, limpiar,\n"
         "              diagnosticar, hallazgo:hall_x=estado, resolver:id, cancelar, matar, catalogo,\n"
-        "              recomendar, registrar:prueba=resultado, acciones\n"
+        "              recomendar, registrar:prueba=resultado, acciones, explicar\n"
         "  --captura   guarda la pantalla en un .bmp y termina (evidencia de pruebas)\n", prog);
 }
 
@@ -25,6 +25,7 @@ static int pantalla_desde(const char *n) {
     if (!strcmp(n, "diagnostico")) return PANT_DIAGNOSTICO;
     if (!strcmp(n, "pruebas")) return PANT_PRUEBAS;
     if (!strcmp(n, "acciones")) return PANT_ACCIONES;
+    if (!strcmp(n, "explicacion")) return PANT_EXPLICACION;
     return -2;
 }
 

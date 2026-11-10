@@ -12,7 +12,7 @@ TEST_C2 := pruebas/pruebas_c
 TEST_IN := pruebas/pruebas_integracion
 # Todo el front-end que no necesita SDL: lo comparten las pruebas del controlador y las de integración.
 TEST_LIB := frontend/controlador.c frontend/menu.c frontend/validaciones.c frontend/vehiculo.c \
-            frontend/sintomas.c frontend/diagnostico.c frontend/pruebas_adicionales.c frontend/acciones.c integracion/conexion.c integracion/vendor/cJSON.c
+            frontend/sintomas.c frontend/diagnostico.c frontend/pruebas_adicionales.c frontend/acciones.c frontend/explicacion.c integracion/conexion.c integracion/vendor/cJSON.c
 TEST_CFLAGS := -std=gnu11 -Wall -Wextra -w -Ifrontend -Iintegracion -Iintegracion/vendor
 
 .PHONY: build run test clean deps capturas calibrar
@@ -37,7 +37,7 @@ test:
 	LANG=C.UTF-8 swipl -q -g run_tests -t halt pruebas/pruebas_prolog.pl
 	$(CC) $(TEST_CFLAGS) -o $(TEST_C) $(TEST_C).c $(TEST_LIB) -lm
 	./$(TEST_C) backend/servidor_json.pl pruebas/servidor_kb_rota.pl 2>/dev/null
-	$(CC) $(TEST_CFLAGS) -o $(TEST_C2) $(TEST_C2).c frontend/sintomas.c frontend/diagnostico.c frontend/pruebas_adicionales.c frontend/acciones.c integracion/vendor/cJSON.c -lm
+	$(CC) $(TEST_CFLAGS) -o $(TEST_C2) $(TEST_C2).c frontend/sintomas.c frontend/diagnostico.c frontend/pruebas_adicionales.c frontend/acciones.c frontend/explicacion.c integracion/vendor/cJSON.c -lm
 	./$(TEST_C2)
 	$(CC) $(TEST_CFLAGS) -o $(TEST_IN) $(TEST_IN).c $(TEST_LIB) -lm
 	LANG=C.UTF-8 ./$(TEST_IN)
@@ -84,6 +84,13 @@ capturas: build
 	  --accion diagnosticar --accion acciones --captura $(EVD)/f09_acciones.bmp
 	$(CAP) --pantalla acciones --accion marcar:chirrido_frenos=presente --accion marcar:pedal_freno_esponjoso=presente \
 	  --accion diagnosticar --accion acciones --captura $(EVD)/f09_sin_acciones.bmp
+	$(CAP) --pantalla explicacion --accion marcar:chirrido_frenos=presente --accion marcar:pedal_freno_esponjoso=presente \
+	  --accion hallazgo:hall_medir_espesor_pastillas_freno=normal \
+	  --accion hallazgo:hall_revisar_nivel_estado_liquido_frenos=severo \
+	  --accion hallazgo:hall_inspeccionar_disco_rayaduras_alabeo=normal \
+	  --accion diagnosticar --accion explicar --captura $(EVD)/f08_explicacion.bmp
+	$(CAP) --pantalla explicacion --accion marcar:no_arranca=presente --accion marcar:ralenti_inestable=presente \
+	  --accion resolver:no_arranca --accion diagnosticar --accion explicar --captura $(EVD)/f08_explicacion_rb2.bmp
 	$(CAP) --pantalla sintomas --accion marcar:no_arranca=presente --accion marcar:ralenti_inestable=presente \
 	  --captura $(EVD)/f11_dialogo_rb2.bmp
 	$(CAP) --backend pruebas/servidor_sin_hipotesis.pl --pantalla diagnostico --accion marcar:sin_relacion=presente \

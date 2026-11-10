@@ -31,9 +31,20 @@ falla(Codigo, Mensaje) :- throw(historial_error(Codigo, Mensaje)).
 % ---------- Memoria del último diagnóstico ----------
 % recordar_diagnostico(+Entrada, +Resultado): lo llama el servidor tras cada `diagnosticar`.
 % Guardado = no hasta que se guarde; luego el Id con que quedó en el historial.
-recordar_diagnostico(Entrada, Resultado) :-
+% F08: si al marcar los síntomas hubo contradicciones (RB2, retroceso.pl), sus eventos se guardan
+% con el resultado en la clave `rb2`, para que la traza los narre también desde el historial.
+recordar_diagnostico(Entrada, Resultado0) :-
+    con_rb2(Resultado0, Resultado),
     retractall(ultimo_diagnostico(_, _, _)),
     assertz(ultimo_diagnostico(Entrada, Resultado, no)).
+
+con_rb2(R0, R) :-
+    (   \+ get_dict(rb2, R0, _),
+        current_predicate(retroceso:registro_rb/1),
+        findall(E, retroceso:registro_rb(E), Es), Es \== []
+    ->  put_dict(rb2, R0, Es, R)
+    ;   R = R0
+    ).
 
 % diagnostico_actual(-Entrada, -Resultado): el último `diagnosticar` (falla si no hay ninguno).
 diagnostico_actual(Entrada, Resultado) :- ultimo_diagnostico(Entrada, Resultado, _).

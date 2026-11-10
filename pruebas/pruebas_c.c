@@ -5,6 +5,7 @@
 
 #include "acciones.h"
 #include "diagnostico.h"
+#include "explicacion.h"
 #include "pruebas_adicionales.h"
 #include "sintomas.h"
 
@@ -172,6 +173,39 @@ int main(void) {
         j = cJSON_Parse(ACS("", ""));
         CHECK(acciones_parsear(&ac, j, err, sizeof err) == 0 && ac.n == 0 && !strcmp(ac.mensaje, "M"),
               "sin acciones se acepta con su mensaje");
+        cJSON_Delete(j);
+    }
+
+    puts("explicacion_parsear (F08, RNF-01/02)");
+    {
+        Explicacion ex;
+        memset(&ex, 0, sizeof ex);
+#define EV(it, r) "{\"iteracion\":" it ",\"regla\":\"" r "\",\"texto\":\"T\",\"datos\":{}}"
+#define EXPL(traza, comps) "[{\"conclusion\":\"C\",\"traza\":[" traza "],\"explicacion\":[" comps "]," \
+    "\"acciones\":[{\"accion\":\"a\",\"nombre\":\"A\",\"relevancia\":0.88,\"componentes\":[],\"texto\":\"TA\"}]," \
+    "\"pruebas\":[]}]"
+#define EC(est, p) "{\"componente\":\"c\",\"nombre\":\"C\",\"probabilidad\":" p ",\"estado\":\"" est "\",\"texto\":\"X\"}"
+        cJSON *j = cJSON_Parse(EXPL(EV("0", "RB2") "," EV("0", "R2-R5") "," EV("2", "R7-R8"), EC("confirmado", "0.93")));
+        CHECK(explicacion_parsear(&ex, j, err, sizeof err) == 0 && ex.n_traza == 3 && ex.n_comps == 1 &&
+              ex.n_acciones == 1 && !strcmp(ex.traza[0].regla, "RB2"), "explicación válida se acepta");
+        CHECK(explicacion_max_iteracion(&ex) == 2 && ex.comps[0].estado == COMP_CONFIRMADO,
+              "iteración máxima y estado del componente");
+        cJSON_Delete(j);
+        j = cJSON_Parse(EXPL("", EC("confirmado", "0.93")));
+        CHECK(explicacion_parsear(&ex, j, err, sizeof err) < 0 && strstr(err, "vacía") && ex.n_traza == 3,
+              "traza vacía se informa y no pisa la anterior");
+        cJSON_Delete(j);
+        j = cJSON_Parse(EXPL(EV("1", "R6"), EC("quizas", "0.5")));
+        CHECK(explicacion_parsear(&ex, j, err, sizeof err) < 0, "estado de componente inválido se rechaza");
+        cJSON_Delete(j);
+        j = cJSON_Parse(EXPL(EV("1", "R6"), EC("incierto", "1.7")));
+        CHECK(explicacion_parsear(&ex, j, err, sizeof err) < 0, "probabilidad fuera de [0, 1] se rechaza");
+        cJSON_Delete(j);
+        j = cJSON_Parse(EXPL("{\"iteracion\":\"uno\",\"regla\":\"R6\",\"texto\":\"T\"}", ""));
+        CHECK(explicacion_parsear(&ex, j, err, sizeof err) < 0, "iteración no entera se rechaza");
+        cJSON_Delete(j);
+        j = cJSON_Parse("[{\"traza\":[],\"explicacion\":[],\"acciones\":[],\"pruebas\":[]}]");
+        CHECK(explicacion_parsear(&ex, j, err, sizeof err) < 0, "sin 'conclusion' se rechaza");
         cJSON_Delete(j);
     }
 

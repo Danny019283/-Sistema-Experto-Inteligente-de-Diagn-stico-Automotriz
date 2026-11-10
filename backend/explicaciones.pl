@@ -36,16 +36,38 @@ solo_sintomas([S-E|Es], [S-E|X]) :- solo_sintomas(Es, X).
 % ---------- Eventos (la traza) ----------
 % eventos(+X0, +Res, -Eventos): lista de evento(Iteracion, Regla, Datos).
 eventos(_, Res, Eventos) :-
-    get_dict(motivo, Res, contradiccion), !,
+    get_dict(motivo, Res, M), a_atomo(M, contradiccion), !,
     findall(A-B, ( member(D, Res.contradicciones), a_atomo(D.a, A), a_atomo(D.b, B) ), Pares),
     Eventos = [evento(0, 'R2b', contradiccion(Pares)),
+               evento(0, 'RB2', rb2_motor(Pares)),
                evento(0, 'R6', fin(contradiccion, false, 0))].
-eventos(X0, Res, [evento(0, 'R2-R5', inicial(Clasif))|Eventos]) :-
+eventos(X0, Res, Eventos) :-
+    rb2_eventos(Res, Rb2),                       % contradicciones resueltas al marcar los síntomas
     clasificar(X0, Clasif),
     pasos(Res.traza, X0, 0, Pasos, Iter),
     confirmados_de(Res.componentes, Conf),
     finales(Res, Conf, Iter, Fin),
-    append(Pasos, Fin, Eventos).
+    append([Rb2, [evento(0, 'R2-R5', inicial(Clasif))], Pasos, Fin], Eventos).
+
+% rb2_eventos(+Res, -Eventos): los RB2 que registró retroceso.pl (F11) antes de diagnosticar, en
+% orden; historial.pl los guarda en la clave `rb2`. Sin esa clave no hubo contradicciones.
+rb2_eventos(Res, Evs) :-
+    (   get_dict(rb2, Res, L) -> rb2_lista(L, Evs) ; Evs = [] ).
+
+% rb2_lista(+Registros, -Eventos): recursión sobre los registros; uno desconocido se salta.
+rb2_lista([], []).
+rb2_lista([R|Rs], [evento(0, 'RB2', D)|Es]) :-
+    rb2_dato(R, D), !,
+    rb2_lista(Rs, Es).
+rb2_lista([_|Rs], Es) :-
+    rb2_lista(Rs, Es).
+
+rb2_dato(R, rb2_restaurado(P, N)) :-
+    a_atomo(R.evento, rb2), !, a_atomo(R.previo, P), a_atomo(R.nuevo, N).
+rb2_dato(R, rb2_resuelta(E, D)) :-
+    a_atomo(R.evento, rb2_resuelta), !, a_atomo(R.elegido, E), a_atomo(R.descartado, D).
+rb2_dato(R, rb2_cancelada(P, N)) :-
+    a_atomo(R.evento, rb2_cancelada), a_atomo(R.previo, P), a_atomo(R.nuevo, N).
 
 % pasos(+TrazaMotor, +X, +Iter, -Eventos, -IterFinal): recorre los eventos del ciclo (recursión).
 % Caso base: no quedan eventos. Cada prueba agrega su hallazgo a X, como hizo el motor (R8).
@@ -107,6 +129,19 @@ texto_evento(evento(_, _, inicial(Clasif)), T) :- !,
 texto_evento(evento(_, _, contradiccion(Pares)), T) :- !,
     maplist(texto_par, Pares, Partes), unir(Partes, Lista),
     format(string(T), "R2b: hay datos incompatibles: ~s. No pueden ser ciertos a la vez; corrija la entrada.", [Lista]).
+texto_evento(evento(_, _, rb2_motor(_)), T) :- !,
+    T = "RB2: con datos incompatibles el ciclo se detiene; la memoria de trabajo vuelve al estado anterior y el usuario debe elegir cuál de los dos es correcto.".
+texto_evento(evento(_, _, rb2_restaurado(P, N)), T) :- !,
+    nombre_dato(P, Np), nombre_dato(N, Nn),
+    format(string(T), "RB2: al marcar ~s se detectó que es incompatible con ~s; la memoria de trabajo se restauró al estado anterior a esa entrada.",
+           [Nn, Np]).
+texto_evento(evento(_, _, rb2_resuelta(E, D)), T) :- !,
+    nombre_dato(E, Ne), nombre_dato(D, Nd),
+    format(string(T), "RB2: el usuario eligió ~s como correcto; ~s se descartó y el elegido volvió a evaluarse (R2).",
+           [Ne, Nd]).
+texto_evento(evento(_, _, rb2_cancelada(_, N)), T) :- !,
+    nombre_dato(N, Nn),
+    format(string(T), "RB2: el usuario canceló la elección; se conservó la selección anterior, sin ~s.", [Nn]).
 texto_evento(evento(_, _, apilar(Punto, Cands)), T) :- !,
     maplist(comillas_componente, Cands, Ns), unir(Ns, Lista),
     format(string(T), "R7: se apila el punto de decisión ~w con los candidatos ~s, de mayor a menor probabilidad.",
@@ -167,6 +202,10 @@ texto_aporte(A, S) :-
 datos_dict(inicial(Cl), _{componentes: Cs}) :- !,
     findall(_{id: C, probabilidad: P, estado: E}, member(P-C-E, Cl), Cs).
 datos_dict(contradiccion(Pares), _{pares: Ps}) :- !, findall([A, B], member(A-B, Pares), Ps).
+datos_dict(rb2_motor(Pares), _{pares: Ps}) :- !, findall([A, B], member(A-B, Pares), Ps).
+datos_dict(rb2_restaurado(P, N), _{previo: P, nuevo: N, restaurado: true}) :- !.
+datos_dict(rb2_resuelta(E, D), _{elegido: E, descartado: D}) :- !.
+datos_dict(rb2_cancelada(P, N), _{previo: P, nuevo: N}) :- !.
 datos_dict(apilar(Pt, Cs), _{punto: Pt, candidatos: Cs}) :- !.
 datos_dict(prueba(C, P, E, A, D, L), _{foco: C, prueba: P, resultado: E, antes: A, despues: D, aporte: L}) :- !.
 datos_dict(retroceso(C, P), _{foco: C, probabilidad: P}) :- !.
