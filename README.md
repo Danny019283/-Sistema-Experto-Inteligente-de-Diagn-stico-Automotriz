@@ -64,7 +64,7 @@ Respuesta:
   `limpiar_sintomas`, `fijar_seleccion`, `resolver_contradiccion` y `cancelar_contradiccion`
   («Síntomas y contradicciones»); `guardar_diagnostico`, `listar_diagnosticos` y
   `cargar_diagnostico` (historial, F10); `explicar` (F08); `recomendar_pruebas` y
-  `registrar_resultado_prueba` (F07); `acciones_correctivas` (F09).
+  `registrar_resultado_prueba` (F07); `acciones_correctivas` (F09); `reporte_textual` (F13).
 
 ### `diagnosticar`
 
@@ -194,6 +194,18 @@ Acciones del último `diagnosticar` (`backend/acciones.pl`, capa 3 y regla R9):
   (registrar la prueba recomendada, corregir una contradicción o revisar las pruebas).
 
 Errores: `sin_diagnostico`.
+
+### `reporte_textual` (F13)
+
+Texto plano del reporte de un diagnóstico **guardado** (`backend/reporte.pl`, RF-15): sin args, el
+último diagnóstico si ya se guardó; con `{"id": N}`, uno del historial. `resultados[0]`: `id` y
+`texto` (fecha, vehículo, síntomas, pruebas realizadas, componentes con probabilidad y estado,
+acciones con Ra, traza resumida y estado final). Se arma desde el registro guardado (F10) con los
+textos de `explicar` (F08); las secciones vacías lo dicen ("Sin resultados", "Sin acciones").
+Errores: `sin_diagnostico`, `sin_guardar` (hay diagnóstico pero no se guardó), `no_encontrado`,
+`entrada_invalida`. La interfaz lo muestra y lo exporta a
+`datos/reportes/diagnostico_AAAAMMDD_HHMMSS.txt` (crea la carpeta, nunca sobrescribe; la variable de
+entorno `SE_REPORTES` cambia la carpeta, la usan las pruebas).
 
 El cliente C correlaciona la respuesta por `id` y trata swipl caído / timeout (5 s) /
 respuesta inválida como error de conexión, mostrado en la ventana con botón «Reintentar».

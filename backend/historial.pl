@@ -10,7 +10,7 @@
 :- module(historial, [recordar_diagnostico/2, diagnostico_actual/2,
                       guardar_diagnostico/1, listar_diagnosticos/1,
                       cargar_diagnostico/2, cargar_registros/1, problemas_registros/1,
-                      usar_registros/1, ruta_registros/1,
+                      usar_registros/1, ruta_registros/1, id_guardado_actual/1,
                       diagnostico/6, diagnostico_resultado/3]).
 :- use_module(vehiculo).
 
@@ -50,6 +50,9 @@ con_rb2(R0, R) :-
     ->  put_dict(rb2, R0, Es, R)
     ;   R = R0
     ).
+
+% id_guardado_actual(-Id): número con que se guardó el último diagnóstico (falla si no se guardó).
+id_guardado_actual(Id) :- ultimo_diagnostico(_, _, Id), Id \== no.
 
 % diagnostico_actual(-Entrada, -Resultado): el último `diagnosticar` (falla si no hay ninguno).
 diagnostico_actual(Entrada, Resultado) :- ultimo_diagnostico(Entrada, Resultado, _).

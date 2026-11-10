@@ -3,7 +3,7 @@ NO USAR la skill/harness tdd-sdd (ni /start-dev, tdd-cycle, ni los agentes redac
 # Sistema experto de diagnóstico automotriz
 - Backend Prolog (`backend/hechos.pl` = KB, `backend/servidor_json.pl` = servidor), front en C (Nuklear+SDL2). Contrato JSON en README.md.
 - `make test` corre las pruebas Prolog (`pruebas/pruebas_prolog.pl`).
-- Commits: `feat(F0N): ...` con `Refs #<issue>` (F01 → #54, F02 → #55, F03 → #65, F04 → #56, F07 → #59, F08 → #60, F09 → #61, F10 → #62). Una rama por feature: F01 en feature/f01-base-conocimiento, F02 en feature/f02-motor-inferencia (crearla ANTES de commitear).
+- Commits: `feat(F0N): ...` con `Refs #<issue>` (F01 → #54, F02 → #55, F03 → #65, F04 → #56, F07 → #59, F08 → #60, F09 → #61, F10 → #62, F13 → #66). Una rama por feature: F01 en feature/f01-base-conocimiento, F02 en feature/f02-motor-inferencia (crearla ANTES de commitear).
 - Después de CADA paso: generar tests (en `pruebas/pruebas_prolog.pl`) y verificar que pasen con `make test` (exit 0, sin FAILED ni Warning) antes de commitear.
 
 # Estado de F01 (issue #54)
@@ -48,3 +48,9 @@ Hecho (C): frontend/pruebas_adicionales.c (valida la respuesta), controlador_rec
 Hecho: backend/acciones.pl (op `acciones_correctivas`: Ra noisy-OR solo sobre confirmados existentes, origen con
 efectividad, mensaje "Sin acciones: ningún componente confirmado" con el siguiente paso); frontend/acciones.c (valida
 Ra/P/efectividad en [0, 1]), controlador_acciones, pantalla Acciones (botón "Ir a Pruebas"); `make capturas` f09_*.
+# Estado de F13 (issue #66, rama feature/f13-reporte-textual)
+Hecho: backend/reporte.pl (op `reporte_textual` sin args = último diagnóstico ya guardado, o {id}; texto plano desde el
+registro de F10 con los textos de explicar; errores sin_diagnostico, sin_guardar, no_encontrado); frontend/reporte.c
+(valida, exporta a datos/reportes/diagnostico_AAAAMMDD_HHMMSS.txt con fopen "wx": nunca sobrescribe, agrega _2...;
+crea la carpeta; errores de escritura con su motivo); pantalla Reporte (vista previa + Exportar) y botón en Historial.
+SE_REPORTES cambia la carpeta (pruebas y capturas). datos/reportes/ está en .gitignore.
