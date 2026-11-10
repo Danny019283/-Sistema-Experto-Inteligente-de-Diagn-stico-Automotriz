@@ -87,9 +87,21 @@ int controlador_registrar_vehiculo(Controlador *k) {
 typedef enum { LL_OK, LL_SIN_RES, LL_ERR_PROLOG, LL_ERR_CONEXION } Llamada;
 static Llamada llamar_crudo(Controlador *k, const char *op, cJSON *args, cJSON **resp);
 
+/* Argumentos de diagnosticar: la selección y los resultados de pruebas ya registrados (F07). */
+static cJSON *args_diagnostico(const Controlador *k) {
+    cJSON *args = seleccion_a_args(&k->sel);
+    if (k->n_hall > 0) {
+        cJSON *h = cJSON_AddObjectToObject(args, "hallazgos");
+        for (int i = 0; i < k->n_hall; i++) cJSON_AddStringToObject(h, k->hall[i].id, k->hall[i].estado);
+    }
+    return args;
+}
+
 /* swipl nuevo: el estado de la sesión vivía en el proceso anterior. Se vuelve a registrar el
  * vehículo (F04) y a enviar la selección de síntomas (F05); un diálogo RB2 pendiente se pierde,
- * pero la selección que había es la anterior a la contradicción. */
+ * pero la selección que había es la anterior a la contradicción. Si había un diagnóstico en
+ * pantalla se recalcula (con los hallazgos de F07) para que Prolog vuelva a recordarlo: las
+ * pruebas, la explicación y el guardado trabajan sobre ese último diagnóstico. */
 static void reponer_sesion(Controlador *k) {
     k->contra.pendiente = 0;
     if (k->registrado) {
@@ -100,6 +112,12 @@ static void reponer_sesion(Controlador *k) {
         cJSON *r;
         llamar_crudo(k, "fijar_seleccion", seleccion_a_args_completa(&k->sel), &r);
         cJSON_Delete(r);
+    }
+    if (k->hay_diag) {
+        cJSON *r;
+        llamar_crudo(k, "diagnosticar", args_diagnostico(k), &r);
+        cJSON_Delete(r);
+        k->rec_al_dia = 0;
     }
 }
 
@@ -240,6 +258,7 @@ static void enviar_seleccion(Controlador *k, const char *op, cJSON *args) {
         aplicar_estado(k, resp);
         k->hay_diag = 0;                 /* el diagnóstico mostrado ya no corresponde a la selección */
         k->aviso_diag[0] = '\0';
+        k->hay_rec = k->rec_al_dia = 0;  /* F07: tampoco las pruebas recomendadas */
     } else if (l == LL_ERR_PROLOG) {     /* RNF-02: la selección previa no se altera */
         texto(k->aviso, sizeof k->aviso, k->mensaje);
     }
@@ -296,6 +315,8 @@ void controlador_diagnosticar(Controlador *k) {
     char err[256] = "";
     k->hay_diag = 0;
     k->aviso_diag[0] = '\0';
+    k->hay_rec = k->rec_al_dia = 0;      /* F07: las pruebas se vuelven a pedir para el nuevo */
+    k->aviso_pruebas[0] = '\0';
     if (!k->catalogo_ok) {
         aviso_diag(k, 1, "No hay catálogo de síntomas: no se puede diagnosticar.");
         return;
@@ -304,13 +325,8 @@ void controlador_diagnosticar(Controlador *k) {
         aviso_diag(k, 1, err);
         return;
     }
-    cJSON *args = seleccion_a_args(&k->sel);
-    if (k->n_hall > 0) {
-        cJSON *h = cJSON_AddObjectToObject(args, "hallazgos");
-        for (int i = 0; i < k->n_hall; i++) cJSON_AddStringToObject(h, k->hall[i].id, k->hall[i].estado);
-    }
     cJSON *resp;
-    Llamada l = llamar(k, "diagnosticar", args, &resp);
+    Llamada l = llamar(k, "diagnosticar", args_diagnostico(k), &resp);
     switch (l) {
     case LL_OK:
         if (diagnostico_parsear(&k->diag, cJSON_GetObjectItemCaseSensitive(resp, "resultados"), err, sizeof err) < 0) {
@@ -331,6 +347,100 @@ void controlador_diagnosticar(Controlador *k) {
         break;
     }
     cJSON_Delete(resp);
+}
+
+/* ---------------------------------------------------------------- F07 ---- */
+
+static void aviso_pruebas(Controlador *k, int es_error, const char *txt) {
+    k->aviso_pruebas_error = es_error;
+    texto(k->aviso_pruebas, sizeof k->aviso_pruebas, txt);
+}
+
+void controlador_recomendar_pruebas(Controlador *k) {
+    char err[256] = "";
+    k->rec_al_dia = 1;                   /* un intento por diagnóstico; el botón Actualizar repite */
+    if (!k->hay_diag) {                  /* RNF-01: sin diagnóstico no hay nada que recomendar */
+        k->hay_rec = 0;
+        aviso_pruebas(k, 0, "Primero genere un diagnóstico.");
+        return;
+    }
+    cJSON *resp;
+    Llamada l = llamar(k, "recomendar_pruebas", NULL, &resp);
+    if (l == LL_OK) {
+        if (recomendacion_parsear(&k->rec, cJSON_GetObjectItemCaseSensitive(resp, "resultados"),
+                                  err, sizeof err) < 0) {
+            char m[600];
+            snprintf(m, sizeof m, "Respuesta inválida de Prolog, no se muestra: %s", err);
+            k->hay_rec = 0;
+            aviso_pruebas(k, 1, m);
+        } else {
+            k->hay_rec = 1;
+            k->aviso_pruebas[0] = '\0';
+        }
+    } else if (l == LL_SIN_RES) {
+        k->hay_rec = 0;
+        aviso_pruebas(k, 1, "Prolog no devolvió recomendaciones.");
+    } else {
+        k->hay_rec = 0;
+        aviso_pruebas(k, 1, k->mensaje);
+    }
+    cJSON_Delete(resp);
+}
+
+int controlador_registrar_resultado(Controlador *k, const char *prueba, const char *resultado) {
+    char err[256] = "", hall[ID_LEN], m[1024];
+    /* RNF-01: solo la prueba pendiente y uno de sus resultados; si no, no se llama a Prolog. */
+    if (!k->hay_rec || !k->rec.hay_pendiente) {
+        aviso_pruebas(k, 1, "No hay ninguna prueba pendiente para este diagnóstico.");
+        return 0;
+    }
+    if (strcmp(prueba, k->rec.pendiente.prueba) != 0) {
+        snprintf(m, sizeof m, "La prueba recomendada ahora es \"%s\"; registre primero su resultado.",
+                 k->rec.pendiente.nombre);
+        aviso_pruebas(k, 1, m);
+        return 0;
+    }
+    if (!recomendacion_acepta(&k->rec, resultado)) {
+        aviso_pruebas(k, 1, "Elija un resultado: normal, leve o severo.");
+        return 0;
+    }
+    if (snprintf(hall, sizeof hall, "hall_%s", prueba) >= (int)sizeof hall) {
+        aviso_pruebas(k, 1, "Identificador de prueba demasiado largo.");
+        return 0;
+    }
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddStringToObject(args, "prueba", prueba);
+    cJSON_AddStringToObject(args, "resultado", resultado);
+    cJSON *resp;
+    Llamada l = llamar(k, "registrar_resultado_prueba", args, &resp);
+    if (l != LL_OK) {                    /* RNF-02: el diagnóstico y las pruebas quedan como estaban */
+        aviso_pruebas(k, 1, l == LL_SIN_RES ? "Prolog no devolvió el diagnóstico nuevo." : k->mensaje);
+        cJSON_Delete(resp);
+        return 0;
+    }
+    /* Prolog ya aplicó el hallazgo: se guarda aquí también para que Diagnosticar lo reenvíe. */
+    controlador_hallazgo(k, hall, resultado);
+    int ok = diagnostico_parsear(&k->diag, cJSON_GetObjectItemCaseSensitive(resp, "resultados"),
+                                 err, sizeof err) == 0;
+    cJSON_Delete(resp);
+    if (!ok) {
+        k->hay_diag = 0;                 /* el anterior ya no corresponde; Diagnosticar lo rehace */
+        k->hay_rec = 0;
+        snprintf(m, sizeof m, "Resultado registrado, pero la respuesta de Prolog es inválida: %s", err);
+        aviso_pruebas(k, 1, m);
+        return 1;
+    }
+    k->hay_diag = 1;
+    k->aviso_diag[0] = '\0';
+    char nombre[NOMBRE_LEN];
+    texto(nombre, sizeof nombre, k->rec.pendiente.nombre);
+    controlador_recomendar_pruebas(k);   /* nuevas recomendaciones para el diagnóstico nuevo */
+    if (k->hay_rec) {
+        snprintf(m, sizeof m, "Resultado registrado: \"%s\" = %s. El diagnóstico se actualizó.",
+                 nombre, resultado_prueba_texto(resultado));
+        aviso_pruebas(k, 0, m);
+    }
+    return 1;
 }
 
 /* ---------------------------------------------------------------- F11 ---- */
@@ -370,15 +480,18 @@ int controlador_accion(Controlador *k, const char *accion) {
     else if (!strcmp(buf, "limpiar"))          controlador_limpiar(k);
     else if (!strcmp(buf, "diagnosticar"))     controlador_diagnosticar(k);
     else if (!strcmp(buf, "cancelar"))         controlador_cancelar_contradiccion(k);
+    else if (!strcmp(buf, "recomendar"))       controlador_recomendar_pruebas(k);
     else if (!strcmp(buf, "matar")) {          /* simula la caída de swipl */
         if (k->con.pid > 0) { kill(k->con.pid, SIGKILL); usleep(150000); }
     } else if (!strcmp(buf, "quitar") && arg)  controlador_quitar(k, arg);
     else if (!strcmp(buf, "resolver") && arg)  controlador_resolver(k, arg);
-    else if ((!strcmp(buf, "marcar") || !strcmp(buf, "hallazgo")) && arg) {
+    else if ((!strcmp(buf, "marcar") || !strcmp(buf, "hallazgo") || !strcmp(buf, "registrar")) && arg) {
         char *igual = strchr(arg, '=');
         if (!igual) return -1;
         *igual++ = '\0';
-        if (buf[0] == 'h') {
+        if (!strcmp(buf, "registrar")) {
+            controlador_registrar_resultado(k, arg, igual);
+        } else if (buf[0] == 'h') {
             if (!controlador_hallazgo(k, arg, igual))
                 snprintf(k->aviso_diag, sizeof k->aviso_diag, "Hallazgo inválido: %s=%s", arg, igual);
         } else {

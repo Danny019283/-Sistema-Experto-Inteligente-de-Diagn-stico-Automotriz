@@ -272,7 +272,7 @@ static void resultado_diagnostico(struct nk_context *ctx, const Diagnostico *d) 
     }
 }
 
-static void pantalla_diagnostico(struct nk_context *ctx, Controlador *k) {
+static void pantalla_diagnostico(struct nk_context *ctx, Controlador *k, Menu *m) {
     if (k->registrado) {   /* resumen del vehículo (F04) */
         char r[512];
         vehiculo_resumen(&k->guardado, r, sizeof r);
@@ -294,7 +294,149 @@ static void pantalla_diagnostico(struct nk_context *ctx, Controlador *k) {
         nk_layout_row_dynamic(ctx, 44, 1);
         nk_label_wrap(ctx, "Pulsa Diagnosticar para ver todas las hipótesis.");
     }
+    if (k->hay_diag && !k->diag.concluyente && k->diag.prueba_sugerida[0]) {   /* F07 */
+        nk_layout_row_dynamic(ctx, 36, 1);
+        if (nk_button_label(ctx, "Registrar el resultado de la prueba sugerida")) menu_ir(m, PANT_PRUEBAS);
+    }
     if (k->hay_diag) resultado_diagnostico(ctx, &k->diag);
+}
+
+/* ----------------------------------------------------------------------- F07 ---- */
+
+/* Una prueba sugerida: nombre, componente que verifica y relevancia Rp con su barra. */
+static void fila_prueba(struct nk_context *ctx, const PruebaInfo *p) {
+    char pct[24];
+    nk_layout_row_dynamic(ctx, 22, 1);
+    nk_label(ctx, p->nombre, NK_TEXT_LEFT);
+    float r[] = { 0.48f, 0.32f, 0.20f };
+    nk_layout_row(ctx, NK_DYNAMIC, 22, 3, r);
+    nk_label_colored(ctx, p->nombre_componente, NK_TEXT_LEFT, GRIS);
+    barra_prob(ctx, p->relevancia, AZUL);
+    snprintf(pct, sizeof pct, "Rp %.1f %%", p->relevancia * 100.0);
+    nk_label(ctx, pct, NK_TEXT_RIGHT);
+}
+
+/* Tarjeta de la prueba pendiente: por qué se sugiere, resultado a elegir y botón Registrar.
+ * El resultado elegido se olvida si la prueba pendiente cambia. */
+static void tarjeta_pendiente(struct nk_context *ctx, Controlador *k) {
+    static char prueba_de[ID_LEN] = "", elegido[RESULTADO_LEN] = "";
+    const Recomendacion *rec = &k->rec;
+    const PruebaInfo *p = &rec->pendiente;
+    if (strcmp(prueba_de, p->prueba) != 0) {
+        snprintf(prueba_de, sizeof prueba_de, "%s", p->prueba);
+        elegido[0] = '\0';
+    }
+    nk_layout_row_dynamic(ctx, 28, 1);
+    nk_label_colored(ctx, "PRUEBA RECOMENDADA", NK_TEXT_LEFT, AZUL);
+    fila_prueba(ctx, p);
+    nk_layout_row_dynamic(ctx, 66, 1);
+    nk_label_wrap(ctx, p->texto);
+    nk_layout_row_dynamic(ctx, 24, 1);
+    nk_label(ctx, "Resultado de la prueba:", NK_TEXT_LEFT);
+    nk_layout_row_dynamic(ctx, 28, rec->n_resultados);
+    for (int i = 0; i < rec->n_resultados; i++)
+        if (nk_option_label(ctx, resultado_prueba_texto(rec->resultados[i]),
+                            !strcmp(elegido, rec->resultados[i])))
+            snprintf(elegido, sizeof elegido, "%s", rec->resultados[i]);
+    int listo = elegido[0] != '\0';
+    nk_layout_row_dynamic(ctx, 38, 1);
+    if (!listo) nk_widget_disable_begin(ctx);
+    if (nk_button_label(ctx, "Registrar resultado") && listo) {
+        char r[RESULTADO_LEN];
+        snprintf(r, sizeof r, "%s", elegido);
+        if (controlador_registrar_resultado(k, p->prueba, r)) elegido[0] = '\0';
+    }
+    if (!listo) nk_widget_disable_end(ctx);
+    if (!listo) {
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_label_colored(ctx, "Elija normal, leve o severo para registrar.", NK_TEXT_LEFT, GRIS);
+    }
+}
+
+/* Columna izquierda: la pendiente (o por qué no hay) y las de los demás candidatos. */
+static void panel_recomendadas(struct nk_context *ctx, Controlador *k) {
+    const Recomendacion *rec = &k->rec;
+    if (rec->hay_pendiente) {
+        tarjeta_pendiente(ctx, k);
+    } else {   /* RNF-02: un mensaje que explica por qué, no una lista vacía */
+        nk_layout_row_dynamic(ctx, 28, 1);
+        nk_label_colored(ctx, "SIN PRUEBAS PENDIENTES", NK_TEXT_LEFT, AZUL);
+        nk_layout_row_dynamic(ctx, 66, 1);
+        nk_label_colored_wrap(ctx, rec->mensaje, k->diag.concluyente ? VERDE : AMBAR);
+    }
+    nk_layout_row_dynamic(ctx, 28, 1);
+    nk_label_colored(ctx, "OTRAS PRUEBAS POSIBLES", NK_TEXT_LEFT, AZUL);
+    if (rec->n_otras == 0) {
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_label_colored(ctx, "No hay pruebas para otros candidatos.", NK_TEXT_LEFT, GRIS);
+    }
+    for (int i = 0; i < rec->n_otras; i++) fila_prueba(ctx, &rec->otras[i]);
+    if (rec->hay_pendiente && rec->n_otras > 0) {
+        nk_layout_row_dynamic(ctx, 44, 1);
+        nk_label_colored_wrap(ctx, "El sistema las pedirá en orden: primero registre la prueba recomendada.", GRIS);
+    }
+}
+
+/* Columna derecha: el diagnóstico actualizado y las pruebas ya realizadas con su resultado. */
+static void panel_estado_pruebas(struct nk_context *ctx, Controlador *k) {
+    const Diagnostico *d = &k->diag;
+    nk_layout_row_dynamic(ctx, 36, 1);
+    insignia(ctx, d->concluyente ? "DIAGNÓSTICO CONCLUYENTE" : "DIAGNÓSTICO NO CONCLUYENTE",
+             d->concluyente ? VERDE : AMBAR);
+    nk_layout_row_dynamic(ctx, 24, 1);
+    nk_labelf(ctx, NK_TEXT_LEFT, "Iteraciones usadas: %d de %d", k->rec.iteraciones, k->rec.max_iteraciones);
+    nk_layout_row_dynamic(ctx, 28, 1);
+    nk_label_colored(ctx, "PRUEBAS REALIZADAS", NK_TEXT_LEFT, AZUL);
+    if (k->rec.n_realizadas == 0) {
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_label_colored(ctx, "Todavía no se registró ninguna.", NK_TEXT_LEFT, GRIS);
+    }
+    for (int i = 0; i < k->rec.n_realizadas; i++) {
+        const PruebaInfo *p = &k->rec.realizadas[i];
+        char t[NOMBRE_LEN + 8];
+        snprintf(t, sizeof t, "%d. %s", i + 1, p->nombre);
+        nk_layout_row_dynamic(ctx, 40, 1);           /* dos líneas: los nombres de prueba son largos */
+        nk_label_wrap(ctx, t);
+        nk_layout_row_dynamic(ctx, 22, 2);
+        nk_label_colored(ctx, p->nombre_componente, NK_TEXT_LEFT, GRIS);
+        nk_labelf_colored(ctx, NK_TEXT_LEFT, strcmp(p->resultado, "normal") ? AMBAR : VERDE,
+                          "Resultado: %s", resultado_prueba_texto(p->resultado));
+    }
+    nk_layout_row_dynamic(ctx, 28, 1);
+    nk_label_colored(ctx, "HIPÓTESIS (por probabilidad)", NK_TEXT_LEFT, AZUL);
+    for (int i = 0; i < d->n; i++)
+        if (d->comps[i].estado != COMP_DESCARTADO) fila_componente(ctx, &d->comps[i]);
+}
+
+/* F07 · paso 13: el sistema recomienda la prueba de mayor Rp (Prolog, R7) y el usuario registra
+ * su resultado; Prolog recalcula (R8) y aquí se ve el diagnóstico actualizado. */
+static void pantalla_pruebas(struct nk_context *ctx, Controlador *k) {
+    if (k->hay_diag && !k->rec_al_dia) controlador_recomendar_pruebas(k);   /* al entrar o si cambió */
+    nk_layout_row_dynamic(ctx, 34, 1);
+    if (nk_button_label(ctx, "Actualizar recomendaciones")) controlador_recomendar_pruebas(k);
+    if (k->aviso_pruebas[0]) {
+        nk_layout_row_dynamic(ctx, 50, 1);
+        nk_label_colored_wrap(ctx, k->aviso_pruebas, k->aviso_pruebas_error ? ROJO : VERDE);
+    }
+    if (!k->hay_rec) {
+        if (!k->aviso_pruebas[0]) {
+            nk_layout_row_dynamic(ctx, 44, 1);
+            nk_label_wrap(ctx, "Primero genere un diagnóstico.");
+        }
+        return;
+    }
+    float alto = nk_window_get_content_region(ctx).h - 30 - 34 - 16 - (k->aviso_pruebas[0] ? 54.0f : 0.0f);
+    if (alto < 260) alto = 260;
+    float r2[] = { 0.54f, 0.46f };
+    nk_layout_row(ctx, NK_DYNAMIC, alto, 2, r2);
+    if (nk_group_begin(ctx, "Pruebas recomendadas", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
+        panel_recomendadas(ctx, k);
+        nk_group_end(ctx);
+    }
+    if (nk_group_begin(ctx, "Diagnóstico actualizado", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
+        panel_estado_pruebas(ctx, k);
+        nk_group_end(ctx);
+    }
 }
 
 /* F11 · RB2: «Marcaste X e Y, que son incompatibles. ¿Cuál es correcta?» */
@@ -322,7 +464,7 @@ static void dialogo_contradiccion(struct nk_context *ctx, Controlador *k, int w,
     }
 }
 
-/* Contenido de cada pantalla; las de F07-F10 siguen pendientes. */
+/* Contenido de cada pantalla; las de F08-F10 y F13 siguen pendientes. */
 static void pantalla(struct nk_context *ctx, Controlador *k, Menu *m) {
     nk_layout_row_dynamic(ctx, 30, 1);
     nk_label(ctx, menu_titulo(m->actual), NK_TEXT_LEFT);
@@ -331,7 +473,8 @@ static void pantalla(struct nk_context *ctx, Controlador *k, Menu *m) {
         return;
     }
     if (m->actual == PANT_SINTOMAS) { pantalla_sintomas(ctx, k, m); return; }
-    if (m->actual == PANT_DIAGNOSTICO) { pantalla_diagnostico(ctx, k); return; }
+    if (m->actual == PANT_DIAGNOSTICO) { pantalla_diagnostico(ctx, k, m); return; }
+    if (m->actual == PANT_PRUEBAS) { pantalla_pruebas(ctx, k); return; }
     nk_label_wrap(ctx, "Pantalla pendiente de implementar.");
 }
 

@@ -3,6 +3,7 @@
 
 #include "conexion.h"
 #include "diagnostico.h"
+#include "pruebas_adicionales.h"
 #include "sintomas.h"
 #include "vehiculo.h"
 
@@ -40,8 +41,14 @@ typedef struct {
     int hay_diag;
     char aviso_diag[4096];      /* sin hipótesis / error de Prolog / respuesta inválida */
     int aviso_diag_error;
-    HallazgoSel hall[HALL_MAX]; /* resultados de pruebas ya conocidos (F07 los llenará) */
+    HallazgoSel hall[HALL_MAX]; /* resultados de pruebas ya conocidos (los llena F07) */
     int n_hall;
+    /* F07 · pruebas adicionales. `rec` es lo último que devolvió recomendar_pruebas. */
+    Recomendacion rec;
+    int hay_rec;
+    int rec_al_dia;             /* 0: el diagnóstico cambió y hay que volver a pedir las pruebas */
+    char aviso_pruebas[4096];   /* resultado registrado / error de Prolog ("" = ninguno) */
+    int aviso_pruebas_error;
     /* F11 · RB2 */
     Contradiccion contra;
 } Controlador;
@@ -71,12 +78,22 @@ void controlador_diagnosticar(Controlador *k);
 /* Guarda el resultado de una prueba para el próximo diagnóstico; 1 si es válido (hall_*, normal|leve|severo). */
 int controlador_hallazgo(Controlador *k, const char *id, const char *estado);
 
+/* ---- F07 · pruebas adicionales (qué prueba recomendar lo decide Prolog, R7) ---- */
+/* Pide recomendar_pruebas para el diagnóstico actual; sin diagnóstico no llama a Prolog. */
+void controlador_recomendar_pruebas(Controlador *k);
+/* Registra el resultado de la prueba pendiente (RNF-01: se valida en C antes de enviar).
+ * Si Prolog lo acepta, k->diag pasa a ser el diagnóstico nuevo, el hallazgo queda en k->hall
+ * (Diagnosticar lo vuelve a enviar) y se refrescan las recomendaciones. Con error no cambia
+ * nada y el motivo queda en k->aviso_pruebas. Devuelve 1 si quedó registrado. */
+int controlador_registrar_resultado(Controlador *k, const char *prueba, const char *resultado);
+
 /* ---- F11 · RB2: contradicción entre síntomas ---- */
 void controlador_resolver(Controlador *k, const char *id_elegido);
 void controlador_cancelar_contradiccion(Controlador *k);
 
 /* Acciones por texto (demos y evidencia de pruebas): "marcar:id=estado", "quitar:id", "limpiar",
- * "catalogo", "diagnosticar", "hallazgo:hall_x=estado", "resolver:id", "cancelar", "matar".
+ * "catalogo", "diagnosticar", "hallazgo:hall_x=estado", "resolver:id", "cancelar", "matar",
+ * "recomendar", "registrar:prueba=resultado" (F07).
  * 0 ok, -1 si es desconocida o está mal formada. */
 int controlador_accion(Controlador *k, const char *accion);
 

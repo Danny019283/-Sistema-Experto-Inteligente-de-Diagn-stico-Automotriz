@@ -17,7 +17,7 @@ Pendiente: mostrar el vehículo en el reporte → F10/F13 (usar `consultar_vehic
 # Estado de F05, F06, F11 y F12 (issues #57, #58, #63 y F12; integradas sobre F00-F04)
 Hecho: F05 (backend/ops_sintomas.pl, memoria_x.pl, sistemas.pl; pantalla Síntomas con catálogo por sistema y estados presente/ausente/desconocido); F06 (pantalla Diagnóstico: tabla por P, barras, descartadas aparte, concluyente / no concluyente, iteraciones; frontend/diagnostico.c valida la respuesta); F11 solo RB2 (backend/retroceso.pl, diálogo en interfaz.c; RB1/RB3 ya vivían en reglas.pl); F12 (15 casos en pruebas/casos_prueba.txt, `make test` con plunit + C + integración con swipl real, `make capturas`, `make calibrar`). Detalle y decisiones: documentacion/integracion_f05_f06_f11_f12.md.
 Decisión a revisar: la KB no tiene «sistema»; backend/sistemas.pl lo clasifica (tabla de componentes + síntoma deducido). Un componente nuevo sin fila cae en «General» y una prueba lo señala.
-Pendiente: pantalla Pruebas (F07) debe usar `controlador_hallazgo`; calibrar tau_alto/tau_bajo en grupo (`make calibrar`: 0,85 queda a 2 pp de Relé/Circuito de control).
+Pendiente: calibrar tau_alto/tau_bajo en grupo (`make calibrar`: 0,85 queda a 2 pp de Relé/Circuito de control).
 # Estado de F10 (issue #62, rama feature/f10-guardar-diagnostico)
 Hecho (backend): backend/historial.pl (`diagnostico/6` y `diagnostico_resultado/3` dinámicos, persistidos en
 datos/registros.txt, leídos al arrancar `main`); ops `guardar_diagnostico` (guarda el último `diagnosticar`, que el
@@ -38,4 +38,5 @@ deja un punto de elección (avisos «succeeded with choicepoint» en pruebas de 
 Hecho (backend): backend/pruebas_adicionales.pl, ops `recomendar_pruebas` (pendiente, otras, realizadas, mensaje) y
 `registrar_resultado_prueba {prueba, resultado}` (reejecuta el ciclo con el hallazgo y recuerda el nuevo diagnóstico).
 Decisión: solo se registra la prueba pendiente (el motor aplica un hallazgo solo cuando R7 pide esa prueba).
-Pendiente: pantalla Pruebas en C (debe llamar también a `controlador_hallazgo` para que Diagnosticar lo conserve).
+Hecho (C): frontend/pruebas_adicionales.c (valida la respuesta), controlador_recomendar_pruebas / controlador_registrar_resultado
+(guarda el hallazgo con `controlador_hallazgo`; al reabrir swipl se recalcula el diagnóstico), pantalla Pruebas; `make capturas` f07_*.

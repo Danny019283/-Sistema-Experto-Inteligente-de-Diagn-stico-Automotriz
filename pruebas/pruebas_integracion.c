@@ -261,11 +261,81 @@ static void n5_sin_hipotesis(void) {
     controlador_cerrar(&k);
 }
 
+/* ------------------------------------------------------------------ F07 -- */
+
+static void i6_pruebas(void) {
+    puts("I6 · F07: recomendar_pruebas y registrar_resultado_prueba (PDF §6)");
+    Controlador k; listo(&k, SERVIDOR);
+    controlador_recomendar_pruebas(&k);
+    CHECK(!k.hay_rec && strstr(k.aviso_pruebas, "Primero genere un diagnóstico"),
+          "sin diagnóstico: mensaje y no se llama a Prolog");
+    sintomas_pdf(&k);
+    controlador_diagnosticar(&k);
+    controlador_recomendar_pruebas(&k);
+    CHECK(k.hay_rec && k.rec.hay_pendiente &&
+          !strcmp(k.rec.pendiente.prueba, "medir_espesor_pastillas_freno"),
+          "la prueba pendiente es la del foco (Pastillas)");
+    CHECK(cerca(k.rec.pendiente.relevancia, 0.70, 0.001) && k.rec.n_resultados == 3,
+          "con su Rp (70 %) y los tres resultados posibles");
+    CHECK(!strcmp(k.rec.pendiente.nombre_componente, "Pastillas de freno") && k.rec.n_realizadas == 0,
+          "muestra el componente y aún no hay realizadas");
+    CHECK(!controlador_registrar_resultado(&k, "revisar_nivel_estado_liquido_frenos", "severo") &&
+          strstr(k.aviso_pruebas, "La prueba recomendada ahora es") && k.n_hall == 0,
+          "otra prueba que no es la pendiente se rechaza en C");
+    CHECK(!controlador_registrar_resultado(&k, "medir_espesor_pastillas_freno", "enorme") &&
+          k.aviso_pruebas_error && k.n_hall == 0, "un resultado inválido no se envía");
+    CHECK(controlador_registrar_resultado(&k, "medir_espesor_pastillas_freno", "normal"),
+          "registrar el resultado de la pendiente");
+    CHECK(k.hay_diag && cerca(comp(&k.diag, "pastillas_freno")->prob, 0.039, 0.002) && k.diag.iteraciones == 1,
+          "el diagnóstico se actualiza: Pastillas baja a 3,9 % (iteración 1)");
+    CHECK(k.n_hall == 1 && !strcmp(k.hall[0].id, "hall_medir_espesor_pastillas_freno"),
+          "el hallazgo queda guardado para Diagnosticar");
+    CHECK(k.hay_rec && !strcmp(k.rec.pendiente.prueba, "revisar_nivel_estado_liquido_frenos") &&
+          k.rec.n_realizadas == 1 && !strcmp(k.rec.realizadas[0].resultado, "normal"),
+          "la siguiente pendiente es la del Líquido y la anterior figura como realizada");
+    CHECK(!k.aviso_pruebas_error && strstr(k.aviso_pruebas, "Resultado registrado"), "confirma el registro");
+    controlador_accion(&k, "registrar:revisar_nivel_estado_liquido_frenos=severo");
+    controlador_accion(&k, "registrar:inspeccionar_disco_rayaduras_alabeo=normal");
+    CHECK(k.diag.concluyente && k.diag.iteraciones == 3, "tras tres resultados el diagnóstico es concluyente");
+    CHECK(k.hay_rec && !k.rec.hay_pendiente && k.rec.n_realizadas == 3 && k.rec.mensaje[0],
+          "sin pendientes: mensaje explicativo, no una lista vacía");
+    CHECK(!controlador_registrar_resultado(&k, "medir_espesor_pastillas_freno", "severo") &&
+          strstr(k.aviso_pruebas, "No hay ninguna prueba pendiente"), "ya no se puede registrar nada");
+    controlador_diagnosticar(&k);
+    CHECK(k.hay_diag && k.diag.concluyente && k.diag.iteraciones == 3,
+          "Diagnosticar de nuevo reenvía los hallazgos y llega al mismo resultado");
+    controlador_cerrar(&k);
+}
+
+static void n6_pruebas_tras_caida(void) {
+    puts("N6 · F07: swipl se cae con pruebas registradas y al reconectar se recuperan");
+    Controlador k; listo(&k, SERVIDOR);
+    sintomas_pdf(&k);
+    controlador_diagnosticar(&k);
+    controlador_recomendar_pruebas(&k);
+    controlador_registrar_resultado(&k, "medir_espesor_pastillas_freno", "normal");
+    controlador_accion(&k, "matar");
+    Recomendacion antes = k.rec;
+    CHECK(!controlador_registrar_resultado(&k, k.rec.pendiente.prueba, "severo") && k.hay_error,
+          "con swipl caído el registro falla con error de conexión");
+    CHECK(k.n_hall == 1 && k.rec.n_realizadas == antes.n_realizadas && k.hay_diag,
+          "el diagnóstico y las pruebas en pantalla no cambian");
+    controlador_cerrar(&k);
+    k.hay_error = 0;
+    controlador_probar_conexion(&k);
+    controlador_recomendar_pruebas(&k);
+    CHECK(!k.hay_error && k.hay_rec && k.rec.n_realizadas == 1 &&
+          !strcmp(k.rec.pendiente.prueba, "revisar_nivel_estado_liquido_frenos"),
+          "Reintentar repone el diagnóstico con el hallazgo y sigue la misma prueba");
+    controlador_cerrar(&k);
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     if (!conexion_swipl_disponible()) { puts("Falta swipl."); return 1; }
     i1_catalogo(); i2_seleccion(); i3_diagnosticar(); i4_rb1_rb3(); i5_rb2();
     n1_validacion(); n2_json_malformado(); n3_swipl_caido(); n4_kb_invalida(); n5_sin_hipotesis();
+    i6_pruebas(); n6_pruebas_tras_caida();
     printf("\npruebas_integracion: %d verificaciones, %d fallos\n", total, fallos);
     return fallos ? 1 : 0;
 }
