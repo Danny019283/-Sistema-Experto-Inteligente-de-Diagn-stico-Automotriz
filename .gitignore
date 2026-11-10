@@ -2,3 +2,6 @@ sistema_experto
 *.o
 pruebas/pruebas_controlador
 *.d
+pruebas/pruebas_c
+pruebas/pruebas_integracion
+pruebas/evidencia/*.bmp

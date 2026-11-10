@@ -1,0 +1,32 @@
+
+P(Cj|S)  esperado    caso / componente
+0.6331    incierto    PDF §6: chirrido + pedal (inicial) / pastillas_freno
+0.4424    incierto    PDF §6: chirrido + pedal (inicial) / liquido_frenos
+0.3064    incierto    PDF §6: chirrido + pedal (inicial) / discos_freno
+0.1459    incierto    PDF §6: chirrido + pedal (inicial) / zapatas_tambor
+0.0388    descartado  PDF §6: + espesor de pastillas normal (RB1) / pastillas_freno
+0.4424    incierto    PDF §6: + espesor de pastillas normal (RB1) / liquido_frenos
+0.3064    incierto    PDF §6: + espesor de pastillas normal (RB1) / discos_freno
+0.1459    incierto    PDF §6: + espesor de pastillas normal (RB1) / zapatas_tambor
+0.0388    descartado  PDF §6: + líquido severo (RB3) / pastillas_freno
+0.9315    confirmado  PDF §6: + líquido severo (RB3) / liquido_frenos
+0.3064    incierto    PDF §6: + líquido severo (RB3) / discos_freno
+0.1459    incierto    PDF §6: + líquido severo (RB3) / zapatas_tambor
+0.0388    descartado  PDF §6: + alabeo de disco normal (Discos descartado) / pastillas_freno
+0.9315    confirmado  PDF §6: + alabeo de disco normal (Discos descartado) / liquido_frenos
+0.0251    descartado  PDF §6: + alabeo de disco normal (Discos descartado) / discos_freno
+0.1459    incierto    PDF §6: + alabeo de disco normal (Discos descartado) / zapatas_tambor
+0.8698    confirmado  Enunciado: no arranca, motor no gira, faros bien, voltaje normal / rele_arranque
+0.8698    confirmado  Enunciado: no arranca, motor no gira, faros bien, voltaje normal / circuito_control_arranque
+0.3636    incierto    Enunciado: no arranca, motor no gira, faros bien, voltaje normal / solenoide_arranque
+0.0142    descartado  Chirrido presente + pedal ausente / liquido_frenos
+0.7215    incierto    Chirrido presente + pedal ausente / pastillas_freno
+0.3326    incierto    Chirrido presente + pedal ausente / discos_freno
+
+Ventana válida:
+  tau_bajo en [0.0388, 0.1459)   tau_alto en (0.7215, 0.8698]
+Valores del PDF:
+  tau_bajo=0.05  margen 1.1 pp sobre el descartado más alto, 9.6 pp bajo el incierto más bajo
+  tau_alto=0.85  margen 12.9 pp sobre el incierto más alto, 2.0 pp bajo el confirmado más bajo
+  -> los valores del PDF clasifican bien todos los casos
+Centro de la ventana: tau_bajo~0.09, tau_alto~0.80

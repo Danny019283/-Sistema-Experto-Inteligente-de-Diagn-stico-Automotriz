@@ -60,7 +60,8 @@ candidatos(X, Cs) :-
 %   Pila    [punto(Id, Snapshot, Candidatos, Indice)]; Indice = foco actual (RB1/RB3 lo avanzan)
 %   Resp    resultados de pruebas dados por el usuario (hall_*-Estado); se aplican al pedirse la prueba
 %   Traza   eventos, el más reciente primero
-% RB2 (restaurar X al snapshot tras una contradicción) se completa en F11: aquí R2b solo detecta.
+% RB2 (restaurar X al snapshot tras una contradicción) vive en retroceso.pl (F11), que actúa al
+% marcar cada síntoma; aquí R2b detiene el ciclo, informa el par y lo deja en la traza.
 
 % diagnosticar(+Entrada, -Resultado): Entrada validada (validar_entrada/2) = lista Sintoma-Estado.
 % Los hallazgos de la entrada no entran de golpe: se aplican cuando el ciclo recomienda esa
@@ -70,9 +71,10 @@ diagnosticar(Entrada, Res) :-
     contradicciones(X0, Pares),
     (   Pares \== []
     ->  findall(_{a: A, b: B}, member(A-B, Pares), Cs),               % R2b -> RB2 (F11)
+        findall(_{evento: rb2, a: A, b: B}, member(A-B, Pares), Traza),  % RB2 queda en la traza
         Res = _{concluyente: false, motivo: contradiccion, contradicciones: Cs,
                 iteraciones: 0, componentes: [], acciones: [], pruebas_sugeridas: [],
-                explicacion: [], traza: [], pruebas_hechas: [], hallazgos_no_aplicados: []}
+                explicacion: [], traza: Traza, pruebas_hechas: [], hallazgos_no_aplicados: []}
     ;   ciclo(e(X0, [], 0, [], Resp, []), Final),
         reporte(Final, Res)
     ).
