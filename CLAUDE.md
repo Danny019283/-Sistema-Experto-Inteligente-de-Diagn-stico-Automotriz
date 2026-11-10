@@ -25,7 +25,10 @@ servidor recuerda con `recordar_diagnostico/2`), `listar_diagnosticos`, `cargar_
 sin_diagnostico, sin_vehiculo, ya_guardado, error_escritura, no_encontrado, registros_corrupto (con los válidos en
 `resultados`). datos/registros.txt está en .gitignore; las pruebas usan un archivo temporal (`usar_registros/1`).
 El resultado que se guarda es el ya enriquecido por `enriquecer_diagnostico/2` (F06).
-Pendiente: botón «Guardar» (en la pantalla Diagnóstico de F06) y lista del historial en la interfaz C.
+Hecho (C, feature/f10-historial-interfaz): frontend/historial.c (valida resúmenes y diagnóstico guardado con el parser de
+F06), controlador_guardar/listar/abrir, botón "Guardar diagnóstico", pantalla Historial (PANT_HISTORIAL, siempre
+habilitada). SE_REGISTROS (variable de entorno) cambia la ruta: las pruebas de integración y `make capturas` NO deben
+tocar datos/registros.txt.
 # Estado de F08 (issue #60, rama feature/f08-explicacion, creada desde F10)
 Hecho (backend): backend/explicaciones.pl (`explicar/3`: traza evento(Iteracion, Regla, Datos) con texto, reconstruyendo X
 paso a paso desde la traza del motor; explicación por componente, acciones con su origen, pruebas sugeridas, conclusión);

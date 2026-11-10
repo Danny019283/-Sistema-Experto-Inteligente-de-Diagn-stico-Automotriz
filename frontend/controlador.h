@@ -5,6 +5,7 @@
 #include "conexion.h"
 #include "diagnostico.h"
 #include "explicacion.h"
+#include "historial.h"
 #include "pruebas_adicionales.h"
 #include "sintomas.h"
 #include "vehiculo.h"
@@ -63,6 +64,17 @@ typedef struct {
     int expl_al_dia;            /* 0: el diagnóstico cambió y hay que volver a pedirla */
     char aviso_expl[4096];      /* error de Prolog / respuesta inválida ("" = ninguno) */
     int aviso_expl_error;
+    /* F10 · historial. `guardado_id` es el número con que se guardó el diagnóstico actual (0 = no). */
+    int guardado_id;
+    char aviso_guardar[4096];
+    int aviso_guardar_error;
+    Historial hist;             /* lo último que devolvió listar_diagnosticos */
+    int hay_hist;
+    int hist_al_dia;            /* 0: se guardó algo o se reabrió swipl; hay que volver a listar */
+    DiagGuardado abierto;       /* el diagnóstico del historial que se está viendo */
+    int hay_abierto;
+    char aviso_hist[4096];      /* registros dañados, error de Prolog ("" = ninguno) */
+    int aviso_hist_error;
     /* F11 · RB2 */
     Contradiccion contra;
 } Controlador;
@@ -101,6 +113,15 @@ void controlador_recomendar_pruebas(Controlador *k);
  * nada y el motivo queda en k->aviso_pruebas. Devuelve 1 si quedó registrado. */
 int controlador_registrar_resultado(Controlador *k, const char *prueba, const char *resultado);
 
+/* ---- F10 · historial de diagnósticos (datos/registros.txt, en Prolog) ---- */
+/* Guarda el diagnóstico actual con el vehículo registrado. RNF-01: sin diagnóstico o sin vehículo
+ * no se llama a Prolog. Los errores (ya guardado, escritura) quedan en k->aviso_guardar. */
+int controlador_guardar(Controlador *k);
+/* Lista el historial. Con registros_corrupto muestra los válidos y avisa de las líneas dañadas. */
+void controlador_listar(Controlador *k);
+/* Abre un diagnóstico guardado en k->abierto (no reemplaza al diagnóstico actual). */
+int controlador_abrir(Controlador *k, int id);
+
 /* ---- F08 · explicación del razonamiento ---- */
 /* RNF-01: solo con un diagnóstico calculado se pide `explicar`; sin él, "Primero genere un
  * diagnóstico". Un error o una traza vacía quedan en k->aviso_expl sin dibujar nada. */
@@ -117,7 +138,8 @@ void controlador_cancelar_contradiccion(Controlador *k);
 
 /* Acciones por texto (demos y evidencia de pruebas): "marcar:id=estado", "quitar:id", "limpiar",
  * "catalogo", "diagnosticar", "hallazgo:hall_x=estado", "resolver:id", "cancelar", "matar",
- * "recomendar", "registrar:prueba=resultado" (F07), "acciones" (F09), "explicar" (F08).
+ * "recomendar", "registrar:prueba=resultado" (F07), "acciones" (F09), "explicar" (F08),
+ * "guardar", "listar", "abrir:id" (F10), "vehiculo:marca,modelo,anio,cilindrada,combustible,km".
  * 0 ok, -1 si es desconocida o está mal formada. */
 int controlador_accion(Controlador *k, const char *accion);
 

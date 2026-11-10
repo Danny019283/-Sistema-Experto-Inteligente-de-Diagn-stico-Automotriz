@@ -121,7 +121,10 @@ inválido y el registro anterior queda intacto.
 Historial persistente en `datos/registros.txt` (`backend/historial.pl`): hechos
 `diagnostico(Id, Fecha, Vehiculo, Concluyente, Motivo, Iteraciones)` y
 `diagnostico_resultado(Id, Clave, Valor)`, uno por línea. Se lee al arrancar el servidor y cada
-guardado agrega líneas al final; el archivo y la carpeta se crean si faltan.
+guardado agrega líneas al final; el archivo y la carpeta se crean si faltan. La variable de entorno
+`SE_REGISTROS` cambia la ruta del archivo (las pruebas de integración y `make capturas` la usan para
+no tocar el historial real). En la interfaz: botón "Guardar diagnóstico" en Diagnóstico y pantalla
+Historial (lista y detalle de cada diagnóstico guardado).
 
 - `guardar_diagnostico` (sin args): guarda el **último** `diagnosticar` (concluyente o no) con el
   vehículo registrado; Prolog lo recuerda, el cliente no reenvía nada. Devuelve el resumen

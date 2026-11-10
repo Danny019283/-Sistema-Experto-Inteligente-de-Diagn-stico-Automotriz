@@ -19,8 +19,13 @@
 :- dynamic ruta_actual/1, problemas_actuales/1.
 
 % Ruta por defecto: <repo>/datos/registros.txt (relativa a este archivo, no al directorio actual).
-:- prolog_load_context(directory, Dir),
-   atomic_list_concat([Dir, '/../datos/registros.txt'], Ruta),
+% La variable de entorno SE_REGISTROS la reemplaza: las pruebas de integración en C y las capturas
+% la usan para no tocar el historial real.
+:- (   getenv('SE_REGISTROS', Ruta), Ruta \== ''
+   ->  true
+   ;   prolog_load_context(directory, Dir),
+       atomic_list_concat([Dir, '/../datos/registros.txt'], Ruta)
+   ),
    retractall(ruta_actual(_)), assertz(ruta_actual(Ruta)).
 
 ruta_registros(Ruta) :- ruta_actual(Ruta).

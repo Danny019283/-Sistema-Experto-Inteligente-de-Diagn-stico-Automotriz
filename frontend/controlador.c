@@ -118,6 +118,7 @@ static void reponer_sesion(Controlador *k) {
         llamar_crudo(k, "diagnosticar", args_diagnostico(k), &r);
         cJSON_Delete(r);
         k->rec_al_dia = k->acc_al_dia = k->expl_al_dia = 0;
+        k->hist_al_dia = 0;               /* F10: el historial se vuelve a leer del proceso nuevo */
     }
 }
 
@@ -261,6 +262,7 @@ static void enviar_seleccion(Controlador *k, const char *op, cJSON *args) {
         k->hay_rec = k->rec_al_dia = 0;  /* F07: tampoco las pruebas recomendadas */
         k->hay_acc = k->acc_al_dia = 0;  /* F09: ni las acciones */
         k->hay_expl = k->expl_al_dia = 0;  /* F08: ni la explicación */
+        k->guardado_id = 0;              /* F10: un diagnóstico nuevo todavía no está guardado */
     } else if (l == LL_ERR_PROLOG) {     /* RNF-02: la selección previa no se altera */
         texto(k->aviso, sizeof k->aviso, k->mensaje);
     }
@@ -320,6 +322,8 @@ void controlador_diagnosticar(Controlador *k) {
     k->hay_rec = k->rec_al_dia = 0;      /* F07: las pruebas se vuelven a pedir para el nuevo */
     k->hay_acc = k->acc_al_dia = 0;      /* F09: las acciones también */
     k->hay_expl = k->expl_al_dia = 0;    /* F08: y la explicación */
+    k->guardado_id = 0;                  /* F10: un diagnóstico nuevo todavía no está guardado */
+    k->aviso_guardar[0] = 0;
     k->aviso_pruebas[0] = '\0';
     k->aviso_acc[0] = '\0';
     k->aviso_expl[0] = '\0';
@@ -438,6 +442,7 @@ int controlador_registrar_resultado(Controlador *k, const char *prueba, const ch
     }
     k->hay_diag = 1;
     k->acc_al_dia = k->expl_al_dia = 0;  /* F08/F09: cambian con el diagnóstico nuevo */
+    k->guardado_id = 0;                  /* F10: un diagnóstico nuevo todavía no está guardado */
     k->aviso_diag[0] = '\0';
     char nombre[NOMBRE_LEN];
     texto(nombre, sizeof nombre, k->rec.pendiente.nombre);
@@ -448,6 +453,132 @@ int controlador_registrar_resultado(Controlador *k, const char *prueba, const ch
         aviso_pruebas(k, 0, m);
     }
     return 1;
+}
+
+/* ---------------------------------------------------------------- F10 ---- */
+
+static void aviso_guardar(Controlador *k, int es_error, const char *txt) {
+    k->aviso_guardar_error = es_error;
+    texto(k->aviso_guardar, sizeof k->aviso_guardar, txt);
+}
+
+static void aviso_hist(Controlador *k, int es_error, const char *txt) {
+    k->aviso_hist_error = es_error;
+    texto(k->aviso_hist, sizeof k->aviso_hist, txt);
+}
+
+int controlador_guardar(Controlador *k) {
+    char err[256] = "", m[512];
+    if (!k->hay_diag) {                  /* RNF-01: nada que guardar */
+        aviso_guardar(k, 1, "Primero genere un diagnóstico.");
+        return 0;
+    }
+    if (!k->registrado) {
+        aviso_guardar(k, 1, "Registre el vehículo antes de guardar el diagnóstico.");
+        return 0;
+    }
+    if (k->guardado_id > 0) {
+        snprintf(m, sizeof m, "Este diagnóstico ya está guardado en el historial con el número %d.", k->guardado_id);
+        aviso_guardar(k, 1, m);
+        return 0;
+    }
+    cJSON *resp;
+    Llamada l = llamar(k, "guardar_diagnostico", NULL, &resp);
+    int ok = 0;
+    if (l == LL_OK) {
+        ResumenDiag r;
+        const cJSON *res = cJSON_GetObjectItemCaseSensitive(resp, "resultados");
+        if (resumen_parsear(&r, cJSON_IsArray(res) ? cJSON_GetArrayItem(res, 0) : NULL, err, sizeof err) < 0) {
+            snprintf(m, sizeof m, "Se guardó, pero la respuesta de Prolog es inválida: %s", err);
+            aviso_guardar(k, 1, m);
+        } else {
+            k->guardado_id = r.id;
+            snprintf(m, sizeof m, "Diagnóstico guardado en el historial con el número %d (%s).", r.id, r.fecha);
+            aviso_guardar(k, 0, m);
+        }
+        k->hist_al_dia = 0;              /* la lista cambió */
+        ok = 1;
+    } else {                             /* RNF-02: ya_guardado, sin_vehiculo, error_escritura... */
+        aviso_guardar(k, 1, l == LL_SIN_RES ? "Prolog no confirmó el guardado." : k->mensaje);
+    }
+    cJSON_Delete(resp);
+    return ok;
+}
+
+/* Como llamar(), pero en un error de Prolog conserva la respuesta: registros_corrupto trae los
+ * registros válidos en `resultados`. */
+static Llamada llamar_conservando(Controlador *k, const char *op, cJSON **resp) {
+    char err[256] = "";
+    *resp = NULL;
+    if (!conexion_viva(&k->con)) {
+        k->hay_error = 1;
+        snprintf(k->mensaje, sizeof k->mensaje, "Error de conexión: Prolog no está conectado");
+        return LL_ERR_CONEXION;
+    }
+    cJSON *r = conexion_peticion(&k->con, op, NULL, err, sizeof err);
+    if (!r) {
+        k->hay_error = 1;
+        snprintf(k->mensaje, sizeof k->mensaje, "Error de conexión: %s", err);
+        return LL_ERR_CONEXION;
+    }
+    const cJSON *e = cJSON_GetObjectItemCaseSensitive(r, "estado");
+    const char *es = cJSON_IsString(e) ? e->valuestring : "";
+    *resp = r;
+    if (!strcmp(es, "ok")) return LL_OK;
+    if (!strcmp(es, "sin_resultados")) return LL_SIN_RES;
+    controlador_interpretar(k, r);
+    k->hay_error = 0;                    /* un error de datos no es una caída de la conexión */
+    return LL_ERR_PROLOG;
+}
+
+void controlador_listar(Controlador *k) {
+    char err[256] = "", m[1024];
+    k->hist_al_dia = 1;
+    k->hay_hist = 0;
+    k->aviso_hist[0] = '\0';
+    cJSON *resp;
+    Llamada l = llamar_conservando(k, "listar_diagnosticos", &resp);
+    const cJSON *res = cJSON_GetObjectItemCaseSensitive(resp, "resultados");
+    const cJSON *cod = cJSON_GetObjectItemCaseSensitive(cJSON_GetObjectItemCaseSensitive(resp, "error"), "codigo");
+    int corrupto = l == LL_ERR_PROLOG && cJSON_IsString(cod) && !strcmp(cod->valuestring, "registros_corrupto");
+    if (l == LL_OK || l == LL_SIN_RES || corrupto) {   /* sin_resultados: historial vacío */
+        if (historial_parsear(&k->hist, res, err, sizeof err) < 0) {
+            snprintf(m, sizeof m, "Respuesta inválida de Prolog, no se muestra el historial: %s", err);
+            aviso_hist(k, 1, m);
+        } else {
+            k->hay_hist = 1;
+            if (corrupto) {              /* RNF-02: se informan las líneas dañadas, los válidos se ven */
+                k->aviso_hist_error = 1;
+                snprintf(k->aviso_hist, sizeof k->aviso_hist,
+                         "Algunas líneas del historial están dañadas y se omitieron. %.3900s", k->mensaje);
+            }
+        }
+    } else {
+        aviso_hist(k, 1, k->mensaje);
+    }
+    cJSON_Delete(resp);
+}
+
+int controlador_abrir(Controlador *k, int id) {
+    char err[256] = "", m[600];
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddNumberToObject(args, "id", id);
+    cJSON *resp;
+    Llamada l = llamar(k, "cargar_diagnostico", args, &resp);
+    int ok = 0;
+    if (l == LL_OK) {
+        if (diagnostico_guardado_parsear(&k->abierto, cJSON_GetObjectItemCaseSensitive(resp, "resultados"),
+                                         err, sizeof err) < 0) {
+            snprintf(m, sizeof m, "No se puede mostrar el diagnóstico %d: %s", id, err);
+            aviso_hist(k, 1, m);
+        } else {
+            k->hay_abierto = ok = 1;
+        }
+    } else {
+        aviso_hist(k, 1, l == LL_SIN_RES ? "Prolog no devolvió el diagnóstico." : k->mensaje);
+    }
+    cJSON_Delete(resp);
+    return ok;
 }
 
 /* ---------------------------------------------------------------- F08 ---- */
@@ -560,6 +691,25 @@ int controlador_accion(Controlador *k, const char *accion) {
     else if (!strcmp(buf, "recomendar"))       controlador_recomendar_pruebas(k);
     else if (!strcmp(buf, "acciones"))         controlador_acciones(k);
     else if (!strcmp(buf, "explicar"))         controlador_explicar(k);
+    else if (!strcmp(buf, "guardar"))          controlador_guardar(k);
+    else if (!strcmp(buf, "listar"))           controlador_listar(k);
+    else if (!strcmp(buf, "abrir") && arg)     controlador_abrir(k, atoi(arg));
+    else if (!strcmp(buf, "vehiculo") && arg) {   /* marca,modelo,anio,cilindrada,combustible,km */
+        char *c[6];
+        int n = 0;
+        for (char *p = strtok(arg, ","); p && n < 6; p = strtok(NULL, ",")) c[n++] = p;
+        if (n != 6) return -1;
+        FormVehiculo *f = &k->form;
+        snprintf(f->marca, sizeof f->marca, "%s", c[0]);
+        snprintf(f->modelo, sizeof f->modelo, "%s", c[1]);
+        snprintf(f->anio, sizeof f->anio, "%s", c[2]);
+        snprintf(f->cilindrada, sizeof f->cilindrada, "%s", c[3]);
+        snprintf(f->km, sizeof f->km, "%s", c[5]);
+        f->combustible = -1;
+        for (int i = 0; i < VF_N_COMBUSTIBLES; i++)
+            if (!strcmp(VF_COMBUSTIBLE_ID[i], c[4])) f->combustible = i;
+        controlador_registrar_vehiculo(k);
+    }
     else if (!strcmp(buf, "matar")) {          /* simula la caída de swipl */
         if (k->con.pid > 0) { kill(k->con.pid, SIGKILL); usleep(150000); }
     } else if (!strcmp(buf, "quitar") && arg)  controlador_quitar(k, arg);

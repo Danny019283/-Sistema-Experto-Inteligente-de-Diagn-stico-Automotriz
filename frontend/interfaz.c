@@ -298,6 +298,20 @@ static void pantalla_diagnostico(struct nk_context *ctx, Controlador *k, Menu *m
         nk_layout_row_dynamic(ctx, 36, 1);
         if (nk_button_label(ctx, "Registrar el resultado de la prueba sugerida")) menu_ir(m, PANT_PRUEBAS);
     }
+    if (k->hay_diag) {                   /* F10: guardar en el historial (paso 17, R11) */
+        int puede = k->guardado_id == 0;
+        char b[64];
+        if (puede) snprintf(b, sizeof b, "Guardar diagnóstico");
+        else       snprintf(b, sizeof b, "Guardado en el historial (número %d)", k->guardado_id);
+        nk_layout_row_dynamic(ctx, 36, 1);
+        if (!puede) nk_widget_disable_begin(ctx);
+        if (nk_button_label(ctx, b) && puede) controlador_guardar(k);
+        if (!puede) nk_widget_disable_end(ctx);
+        if (k->aviso_guardar[0]) {
+            nk_layout_row_dynamic(ctx, 44, 1);
+            nk_label_colored_wrap(ctx, k->aviso_guardar, k->aviso_guardar_error ? ROJO : VERDE);
+        }
+    }
     if (k->hay_diag) resultado_diagnostico(ctx, &k->diag);
 }
 
@@ -553,6 +567,90 @@ static void pantalla_explicacion(struct nk_context *ctx, Controlador *k) {
     }
 }
 
+/* ----------------------------------------------------------------------- F10 ---- */
+
+/* Nombre de un dato de la entrada: el del catálogo para un síntoma; una prueba con sus palabras. */
+static void nombre_dato_entrada(const Controlador *k, const char *id, char *out, size_t n) {
+    for (int i = 0; i < k->cat.n; i++)
+        if (!strcmp(k->cat.items[i].id, id)) { snprintf(out, n, "%s", k->cat.items[i].nombre); return; }
+    const char *p = !strncmp(id, "hall_", 5) ? id + 5 : id;
+    size_t j = 0;
+    if (p != id) j = (size_t)snprintf(out, n, "Prueba: ");
+    for (; *p && j + 1 < n; p++, j++) out[j] = *p == '_' ? ' ' : *p;
+    out[j < n ? j : n - 1] = '\0';
+}
+
+/* Lista del historial: un botón por diagnóstico, el más nuevo arriba. */
+static void lista_historial(struct nk_context *ctx, Controlador *k) {
+    if (k->hist.n == 0) {
+        nk_layout_row_dynamic(ctx, 44, 1);
+        nk_label_colored_wrap(ctx, "Todavía no hay diagnósticos guardados. Use \"Guardar diagnóstico\" en la pantalla Diagnóstico.", GRIS);
+        return;
+    }
+    for (int i = k->hist.n - 1; i >= 0; i--) {
+        const ResumenDiag *r = &k->hist.items[i];
+        char t[VEH_TEXTO_LEN + 64], s[NOMBRE_LEN + 64];
+        snprintf(t, sizeof t, "%d. %s", r->id, r->vehiculo);
+        if (r->probabilidad >= 0) snprintf(s, sizeof s, "%s · %s: %s %.1f %%", r->fecha,
+                                           r->concluyente ? "Concluyente" : "No concluyente", r->principal, r->probabilidad * 100.0);
+        else snprintf(s, sizeof s, "%s · %s", r->fecha, r->concluyente ? "Concluyente" : "No concluyente");
+        int sel = k->hay_abierto && k->abierto.id == r->id;
+        nk_layout_row_dynamic(ctx, 30, 1);
+        if (nk_select_label(ctx, t, NK_TEXT_LEFT, sel) && !sel) controlador_abrir(k, r->id);
+        nk_layout_row_dynamic(ctx, 20, 1);
+        nk_label_colored(ctx, s, NK_TEXT_LEFT, r->concluyente ? VERDE : AMBAR);
+    }
+}
+
+/* El diagnóstico abierto: vehículo, entrada y el resultado con el mismo dibujo que en Diagnóstico. */
+static void detalle_historial(struct nk_context *ctx, const Controlador *k) {
+    if (!k->hay_abierto) {
+        nk_layout_row_dynamic(ctx, 44, 1);
+        nk_label_colored_wrap(ctx, "Elija un diagnóstico de la lista para verlo.", GRIS);
+        return;
+    }
+    const DiagGuardado *g = &k->abierto;
+    nk_layout_row_dynamic(ctx, 26, 1);
+    nk_labelf_colored(ctx, NK_TEXT_LEFT, AZUL, "DIAGNÓSTICO %d · %s", g->id, g->fecha);
+    nk_layout_row_dynamic(ctx, 24, 1);
+    nk_label(ctx, g->vehiculo, NK_TEXT_LEFT);
+    nk_layout_row_dynamic(ctx, 26, 1);
+    nk_label_colored(ctx, "DATOS INGRESADOS", NK_TEXT_LEFT, AZUL);
+    for (int i = 0; i < g->n_entrada; i++) {
+        char nom[NOMBRE_LEN + 16];
+        nombre_dato_entrada(k, g->entrada[i].id, nom, sizeof nom);
+        float r[] = { 0.72f, 0.28f };
+        nk_layout_row(ctx, NK_DYNAMIC, 22, 2, r);
+        nk_label(ctx, nom, NK_TEXT_LEFT);
+        nk_label_colored(ctx, g->entrada[i].estado, NK_TEXT_LEFT, GRIS);
+    }
+    resultado_diagnostico(ctx, &g->diag);
+}
+
+/* F10: diagnósticos guardados en datos/registros.txt (se conservan al cerrar la aplicación). */
+static void pantalla_historial(struct nk_context *ctx, Controlador *k) {
+    if (!k->hist_al_dia) controlador_listar(k);   /* al entrar o si se guardó algo */
+    nk_layout_row_dynamic(ctx, 34, 1);
+    if (nk_button_label(ctx, "Actualizar lista")) controlador_listar(k);
+    if (k->aviso_hist[0]) {              /* RNF-02: líneas dañadas o error de Prolog */
+        nk_layout_row_dynamic(ctx, 60, 1);
+        nk_label_colored_wrap(ctx, k->aviso_hist, k->aviso_hist_error ? ROJO : AMBAR);
+    }
+    if (!k->hay_hist) return;
+    float alto = nk_window_get_content_region(ctx).h - 30 - 34 - 16 - (k->aviso_hist[0] ? 64.0f : 0.0f);
+    if (alto < 240) alto = 240;
+    float r2[] = { 0.42f, 0.58f };
+    nk_layout_row(ctx, NK_DYNAMIC, alto, 2, r2);
+    if (nk_group_begin(ctx, "Diagnósticos guardados", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
+        lista_historial(ctx, k);
+        nk_group_end(ctx);
+    }
+    if (nk_group_begin(ctx, "Detalle", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
+        detalle_historial(ctx, k);
+        nk_group_end(ctx);
+    }
+}
+
 /* ----------------------------------------------------------------------- F09 ---- */
 
 /* Una acción: nombre, barra de Ra con su porcentaje y los confirmados que la originan. */
@@ -647,6 +745,7 @@ static void pantalla(struct nk_context *ctx, Controlador *k, Menu *m) {
     if (m->actual == PANT_PRUEBAS) { pantalla_pruebas(ctx, k); return; }
     if (m->actual == PANT_ACCIONES) { pantalla_acciones(ctx, k, m); return; }
     if (m->actual == PANT_EXPLICACION) { pantalla_explicacion(ctx, k); return; }
+    if (m->actual == PANT_HISTORIAL) { pantalla_historial(ctx, k); return; }
     nk_label_wrap(ctx, "Pantalla pendiente de implementar.");
 }
 

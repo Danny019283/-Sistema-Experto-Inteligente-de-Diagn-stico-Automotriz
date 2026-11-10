@@ -100,7 +100,9 @@ static void test_menu(void) {
     CHECK(menu_ir(&m, PANT_SINTOMAS) && m.actual == PANT_SINTOMAS);
     m.sintomas = 1;
     CHECK(menu_ir(&m, PANT_DIAGNOSTICO));
-    for (Pantalla p = PANT_PRUEBAS; p < PANT_SALIR; p++) CHECK(!menu_habilitada(&m, p));
+    for (Pantalla p = PANT_PRUEBAS; p < PANT_SALIR; p++)
+        if (p != PANT_HISTORIAL) CHECK(!menu_habilitada(&m, p));   /* el historial (F10) no depende del diagnóstico */
+    CHECK(menu_habilitada(&m, PANT_HISTORIAL));
     m.diagnostico = 1;
     for (Pantalla p = PANT_VEHICULO; p < PANT_N; p++) CHECK(menu_habilitada(&m, p));
     CHECK(!menu_ir(&m, PANT_SALIR) && m.actual == PANT_DIAGNOSTICO); /* Salir lo gestiona la interfaz */
