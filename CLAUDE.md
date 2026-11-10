@@ -3,7 +3,7 @@ NO USAR la skill/harness tdd-sdd (ni /start-dev, tdd-cycle, ni los agentes redac
 # Sistema experto de diagnóstico automotriz
 - Backend Prolog (`backend/hechos.pl` = KB, `backend/servidor_json.pl` = servidor), front en C (Nuklear+SDL2). Contrato JSON en README.md.
 - `make test` corre las pruebas Prolog (`pruebas/pruebas_prolog.pl`).
-- Commits: `feat(F0N): ...` con `Refs #<issue>` (F01 → #54, F02 → #55, F03 → #65, F04 → #56). Una rama por feature: F01 en feature/f01-base-conocimiento, F02 en feature/f02-motor-inferencia (crearla ANTES de commitear).
+- Commits: `feat(F0N): ...` con `Refs #<issue>` (F01 → #54, F02 → #55, F03 → #65, F04 → #56, F10 → #62). Una rama por feature: F01 en feature/f01-base-conocimiento, F02 en feature/f02-motor-inferencia (crearla ANTES de commitear).
 - Después de CADA paso: generar tests (en `pruebas/pruebas_prolog.pl`) y verificar que pasen con `make test` (exit 0, sin FAILED ni Warning) antes de commitear.
 
 # Estado de F01 (issue #54)
@@ -18,3 +18,13 @@ Pendiente: mostrar el vehículo en el reporte → F10/F13 (usar `consultar_vehic
 Hecho: F05 (backend/ops_sintomas.pl, memoria_x.pl, sistemas.pl; pantalla Síntomas con catálogo por sistema y estados presente/ausente/desconocido); F06 (pantalla Diagnóstico: tabla por P, barras, descartadas aparte, concluyente / no concluyente, iteraciones; frontend/diagnostico.c valida la respuesta); F11 solo RB2 (backend/retroceso.pl, diálogo en interfaz.c; RB1/RB3 ya vivían en reglas.pl); F12 (15 casos en pruebas/casos_prueba.txt, `make test` con plunit + C + integración con swipl real, `make capturas`, `make calibrar`). Detalle y decisiones: documentacion/integracion_f05_f06_f11_f12.md.
 Decisión a revisar: la KB no tiene «sistema»; backend/sistemas.pl lo clasifica (tabla de componentes + síntoma deducido). Un componente nuevo sin fila cae en «General» y una prueba lo señala.
 Pendiente: pantalla Pruebas (F07) debe usar `controlador_hallazgo`; calibrar tau_alto/tau_bajo en grupo (`make calibrar`: 0,85 queda a 2 pp de Relé/Circuito de control).
+# Estado de F10 (issue #62, rama feature/f10-guardar-diagnostico)
+Hecho (backend): backend/historial.pl (`diagnostico/6` y `diagnostico_resultado/3` dinámicos, persistidos en
+datos/registros.txt, leídos al arrancar `main`); ops `guardar_diagnostico` (guarda el último `diagnosticar`, que el
+servidor recuerda con `recordar_diagnostico/2`), `listar_diagnosticos`, `cargar_diagnostico` (README). Errores
+sin_diagnostico, sin_vehiculo, ya_guardado, error_escritura, no_encontrado, registros_corrupto (con los válidos en
+`resultados`). datos/registros.txt está en .gitignore; las pruebas usan un archivo temporal (`usar_registros/1`).
+El resultado que se guarda es el ya enriquecido por `enriquecer_diagnostico/2` (F06).
+Pendiente: botón «Guardar» (en la pantalla Diagnóstico de F06) y lista del historial en la interfaz C.
+Nota SWI 9.0 (Ubuntu): no autocarga library(http/json) (por eso el import en pruebas_prolog.pl) y `diagnosticar`
+deja un punto de elección (avisos «succeeded with choicepoint» en pruebas de F02 y F05).

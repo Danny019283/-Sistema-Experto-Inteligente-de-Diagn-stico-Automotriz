@@ -57,10 +57,13 @@ Respuesta:
   `sintomas`/`hallazgos` que no son objetos; añade `error.problemas` (lista de textos).
 - Errores de dominio de F11: `contradiccion`, `sin_contradiccion`, `eleccion_invalida`, `pila_vacia`,
   `snapshot_invalido` (llevan `error.mensaje`).
+- Errores del historial (F10): `sin_diagnostico`, `sin_vehiculo`, `ya_guardado`, `error_escritura`,
+  `no_encontrado`, `registros_corrupto` (ver «guardar_diagnostico» abajo).
 - Operaciones: `ping` → `[{"mensaje": "pong"}]`; `diagnosticar`, `registrar_vehiculo` y
   `consultar_vehiculo` (abajo); `catalogo_sintomas`, `marcar_sintoma`, `quitar_sintoma`,
   `limpiar_sintomas`, `fijar_seleccion`, `resolver_contradiccion` y `cancelar_contradiccion`
-  («Síntomas y contradicciones»).
+  («Síntomas y contradicciones»); `guardar_diagnostico`, `listar_diagnosticos` y
+  `cargar_diagnostico` (historial, F10).
 
 ### `diagnosticar`
 
@@ -111,6 +114,29 @@ sin caracteres de control (se recortan los espacios de los extremos); `anio` ent
 el año actual + 1; `kilometraje` entero entre 0 y 3 000 000; `combustible`: `gasolina | diesel |
 hibrido | electrico | gas`. Si algo falla: `entrada_invalida` con un `"campo: motivo"` por campo
 inválido y el registro anterior queda intacto.
+
+### `guardar_diagnostico` / `listar_diagnosticos` / `cargar_diagnostico` (F10)
+
+Historial persistente en `datos/registros.txt` (`backend/historial.pl`): hechos
+`diagnostico(Id, Fecha, Vehiculo, Concluyente, Motivo, Iteraciones)` y
+`diagnostico_resultado(Id, Clave, Valor)`, uno por línea. Se lee al arrancar el servidor y cada
+guardado agrega líneas al final; el archivo y la carpeta se crean si faltan.
+
+- `guardar_diagnostico` (sin args): guarda el **último** `diagnosticar` (concluyente o no) con el
+  vehículo registrado; Prolog lo recuerda, el cliente no reenvía nada. Devuelve el resumen
+  (abajo) en `resultados[0]`. Errores: `sin_diagnostico` (no se calculó ninguno),
+  `sin_vehiculo`, `ya_guardado` (ese diagnóstico ya está en el historial), `error_escritura`
+  (no se pudo escribir el archivo; no cambia nada).
+- `listar_diagnosticos` (sin args): un resumen por diagnóstico, del más antiguo al más nuevo:
+  `id, fecha, vehiculo` ("Toyota Corolla 2015"), `concluyente, motivo, iteraciones`, `principal`
+  y `probabilidad` (el componente más probable, o `null`). Vacío → `sin_resultados`.
+  Si el archivo tiene líneas dañadas o con formato inválido, se omiten y la respuesta es
+  `registros_corrupto` con `error.problemas` (texto por línea) **y los registros válidos en
+  `resultados`** (única respuesta de error con `resultados` no vacío).
+- `cargar_diagnostico` `{"id": 1}`: `id, fecha, vehiculo` (objeto como en `consultar_vehiculo`),
+  `entrada` (`{"sintoma": "estado"}` tal como se pidió) y `resultado` (el objeto de
+  `diagnosticar`, igual que cuando se generó). Errores: `entrada_invalida` (id no entero),
+  `no_encontrado`.
 
 El cliente C correlaciona la respuesta por `id` y trata swipl caído / timeout (5 s) /
 respuesta inválida como error de conexión, mostrado en la ventana con botón «Reintentar».
