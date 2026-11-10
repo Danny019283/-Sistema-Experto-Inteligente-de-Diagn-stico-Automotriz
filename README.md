@@ -63,7 +63,7 @@ Respuesta:
   `consultar_vehiculo` (abajo); `catalogo_sintomas`, `marcar_sintoma`, `quitar_sintoma`,
   `limpiar_sintomas`, `fijar_seleccion`, `resolver_contradiccion` y `cancelar_contradiccion`
   («Síntomas y contradicciones»); `guardar_diagnostico`, `listar_diagnosticos` y
-  `cargar_diagnostico` (historial, F10).
+  `cargar_diagnostico` (historial, F10); `explicar` (F08).
 
 ### `diagnosticar`
 
@@ -137,6 +137,23 @@ guardado agrega líneas al final; el archivo y la carpeta se crean si faltan.
   `entrada` (`{"sintoma": "estado"}` tal como se pidió) y `resultado` (el objeto de
   `diagnosticar`, igual que cuando se generó). Errores: `entrada_invalida` (id no entero),
   `no_encontrado`.
+
+### `explicar` (F08)
+
+Justifica el diagnóstico con textos generados desde la KB (`backend/explicaciones.pl`, regla R10).
+Sin args explica el último `diagnosticar`; con `{"id": N}`, uno guardado en el historial.
+`resultados[0]`:
+- `conclusion`: texto final (concluyente o no; siempre aclara que es una hipótesis).
+- `traza`: eventos en orden cronológico, cada uno con `iteracion`, `regla` (`R2-R5`, `R2b`, `R7`,
+  `R7-R8`, `RB1`, `RB3`, `R6`, `R9`, `R10`), `texto` y `datos` (los números, p. ej. la prueba
+  `{"foco", "prueba", "resultado", "antes", "despues", "aporte"}`).
+  Ej.: «Iteración 1 (R7-R8): foco «Pastillas de freno» (63,3 %)… baja de 63,3 % a 3,9 %».
+- `explicacion`: por componente (`componente, nombre, probabilidad, estado, texto`): por qué se
+  confirma (prior y síntomas que más aportaron al logit), se descarta o sigue incierto.
+- `acciones`: `accion, nombre, relevancia, componentes` (confirmados que la originan) y `texto`.
+- `pruebas`: las sugeridas, con los síntomas presentes que las hacen relevantes.
+
+Errores: `sin_diagnostico` («Primero genere un diagnóstico»), `no_encontrado`, `entrada_invalida`.
 
 El cliente C correlaciona la respuesta por `id` y trata swipl caído / timeout (5 s) /
 respuesta inválida como error de conexión, mostrado en la ventana con botón «Reintentar».

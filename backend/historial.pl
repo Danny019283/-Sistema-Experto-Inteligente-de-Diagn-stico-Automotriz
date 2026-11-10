@@ -7,7 +7,8 @@
 %       (componentes, acciones, pruebas_sugeridas, explicacion, traza, pruebas_hechas, ...).
 % Al arrancar el servidor se leen esos hechos y se agregan con assertz (hechos dinámicos), así
 % el historial se conserva entre ejecuciones. Guardar agrega las líneas al final del archivo.
-:- module(historial, [recordar_diagnostico/2, guardar_diagnostico/1, listar_diagnosticos/1,
+:- module(historial, [recordar_diagnostico/2, diagnostico_actual/2,
+                      guardar_diagnostico/1, listar_diagnosticos/1,
                       cargar_diagnostico/2, cargar_registros/1, problemas_registros/1,
                       usar_registros/1, ruta_registros/1,
                       diagnostico/6, diagnostico_resultado/3]).
@@ -33,6 +34,9 @@ falla(Codigo, Mensaje) :- throw(historial_error(Codigo, Mensaje)).
 recordar_diagnostico(Entrada, Resultado) :-
     retractall(ultimo_diagnostico(_, _, _)),
     assertz(ultimo_diagnostico(Entrada, Resultado, no)).
+
+% diagnostico_actual(-Entrada, -Resultado): el último `diagnosticar` (falla si no hay ninguno).
+diagnostico_actual(Entrada, Resultado) :- ultimo_diagnostico(Entrada, Resultado, _).
 
 % ---------- Guardar (R11) ----------
 % guardar_diagnostico(-Resumen): guarda el último diagnóstico con el vehículo registrado.

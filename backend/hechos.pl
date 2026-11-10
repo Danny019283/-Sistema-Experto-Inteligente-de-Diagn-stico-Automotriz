@@ -40,7 +40,7 @@ sintoma(freno_jala_a_un_lado, 'El vehículo se jala hacia un lado al frenar', si
 sintoma(luz_freno_encendida, 'Luz de advertencia de frenos encendida', sintoma).
 sintoma(pedal_freno_esponjoso, 'Pedal de freno esponjoso o blando', sintoma).
 sintoma(chirrido_frenos, 'Los frenos chirrían', sintoma).
-sintoma(luz_check_engine, 'Luz de «check engine» encendida', sintoma).
+sintoma(luz_check_engine, 'Luz de check engine encendida', sintoma).
 sintoma(clic_al_arrancar, 'Clic al girar la llave o al intentar arrancar', sintoma).
 sintoma(pedal_embrague_esponjoso, 'Pedal de embrague esponjoso o blando', sintoma).
 sintoma(embrague_patina, 'El embrague patina', sintoma).

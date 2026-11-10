@@ -1129,3 +1129,99 @@ test(error_de_escritura_no_cambia_nada, [setup(nuevo(Ruta)), cleanup(fin(_))]) :
     \+ diagnostico(_, _, _, _, _, _),
     historial:ultimo_diagnostico(_, _, no).
 :- end_tests(historial).
+
+% F08 (issue #60): traza y explicación del razonamiento (backend/explicaciones.pl).
+:- begin_tests(explicacion).
+:- use_module('../backend/explicaciones').
+:- use_module('../backend/historial').
+:- use_module('../backend/reglas').
+
+pdf_entrada([chirrido_frenos-presente, pedal_freno_esponjoso-presente,
+             hall_medir_espesor_pastillas_freno-normal, hall_revisar_nivel_estado_liquido_frenos-severo,
+             hall_inspeccionar_disco_rayaduras_alabeo-normal]).
+explicado(E, X) :- once(diagnosticar(E, R)), explicar(E, R, X).
+pdf(X) :- pdf_entrada(E), explicado(E, X).
+contiene(Texto, Sub) :- sub_string(Texto, _, _, _, Sub), !.
+textos_traza(X, Ts) :- findall(T, ( member(D, X.traza), T = D.texto ), Ts).
+alguno(Ts, Sub) :- member(T, Ts), contiene(T, Sub), !.
+
+% Criterio 1: la traza del PDF §6 muestra el pedal con +2,2, la contaminación con +2,8 y el
+% descenso de Pastillas de 63 % a 3,9 %.
+test(traza_pdf_aportes_y_descenso) :-
+    pdf(X), textos_traza(X, Ts),
+    alguno(Ts, "\"Pedal de freno esponjoso o blando\" aportó +2,2"),
+    alguno(Ts, "\"Revisar el nivel y estado del líquido de frenos\" aportó +2,8"),
+    alguno(Ts, "\"Pastillas de freno\" baja de 63,3 % a 3,9 %").
+test(traza_pdf_en_orden_cronologico) :-
+    pdf(X), findall(R, ( member(D, X.traza), R = D.regla ), Rs),
+    Rs == ['R2-R5', 'R7', 'R7-R8', 'RB1', 'R7-R8', 'RB3', 'R7-R8', 'RB1', 'R6', 'R9', 'R10'],
+    findall(I, ( member(D, X.traza), I = D.iteracion ), Is), Is == [0, 0, 1, 1, 2, 2, 3, 3, 3, 3, 3].
+% Criterio 3: los retrocesos RB1 y RB3 aparecen en la traza (RB2 se completa en F11; R2b sí se explica).
+test(retrocesos_en_la_traza) :-
+    pdf(X), textos_traza(X, Ts),
+    alguno(Ts, "RB1: \"Pastillas de freno\" queda descartado (3,9 %, menor o igual que el umbral de 5,0 %)"),
+    alguno(Ts, "RB3: \"Líquido de frenos\" queda confirmado (93,1 %, mayor o igual que el umbral de 85,0 %)").
+test(contradiccion_se_explica) :-
+    explicado([no_arranca-presente, ralenti_inestable-presente], X),
+    textos_traza(X, Ts), alguno(Ts, "R2b: hay datos incompatibles"),
+    contiene(X.conclusion, "contradictorios").
+test(datos_de_la_traza_para_la_interfaz) :-
+    pdf(X), member(D, X.traza), D.regla == 'R7-R8', !,
+    D.datos.foco == pastillas_freno, abs(D.datos.antes - 0.633) < 0.01, abs(D.datos.despues - 0.039) < 0.01.
+test(explicacion_por_componente) :-
+    pdf(X), member(C, X.explicacion), C.componente == liquido_frenos, !,
+    C.estado == confirmado, contiene(C.texto, "Partió de una probabilidad previa de 10,0 %"),
+    member(P, X.explicacion), P.componente == pastillas_freno, !,
+    contiene(P.texto, "lo bajó desde 63,3 %").
+test(acciones_con_su_origen) :-
+    pdf(X), X.acciones = [A|_], A.accion == purgar_cambiar_liquido_frenos, A.componentes == [liquido_frenos],
+    contiene(A.texto, "\"Líquido de frenos\" (93,1 %, con efectividad 0,95)").
+test(pruebas_sugeridas_con_su_motivo) :-
+    explicado([chirrido_frenos-presente], X), X.pruebas = [P|_],
+    contiene(P.texto, "porque está presente: \"Los frenos chirrían\""),
+    contiene(X.conclusion, "no concluyente").
+% Criterio 2: al menos 5 explicaciones distintas (mínimo de la sección 5).
+test(cinco_tipos_de_explicacion) :-
+    pdf(X1), explicado([chirrido_frenos-presente], X2),
+    explicado([no_arranca-presente, ralenti_inestable-presente], X3),
+    Tipos = ["Posible falla en", "se descarta (", "sigue incierto", "atiende", "Se sugiere",
+             "Diagnóstico concluyente", "no concluyente", "R2b: hay datos incompatibles", "R10:"],
+    findall(T, ( member(X, [X1, X2, X3]),
+                 ( member(D, X.explicacion) ; member(D, X.acciones) ; member(D, X.pruebas) ; member(D, X.traza) ),
+                 T = D.texto ), Ts0),
+    findall(C, ( member(X, [X1, X2, X3]), C = X.conclusion ), Cs), append(Ts0, Cs, Ts),
+    forall(member(Tipo, Tipos), alguno(Ts, Tipo)),
+    length(Tipos, N), N >= 5.
+% Criterio 2: los textos salen de la KB; si cambia un hecho, cambia el texto.
+test(texto_cambia_con_la_kb, [setup(cambiar_efectividad(0.95, 0.80)), cleanup(cambiar_efectividad(0.80, 0.95))]) :-
+    pdf(X), X.acciones = [A|_], contiene(A.texto, "efectividad 0,8").
+cambiar_efectividad(De, A) :-
+    retract(user:accion_componente(purgar_cambiar_liquido_frenos, liquido_frenos, De)),
+    assertz(user:accion_componente(purgar_cambiar_liquido_frenos, liquido_frenos, A)).
+
+% Operación JSON `explicar` (RNF-01 y RNF-02).
+pedir_x(Op, Args, R) :-
+    format(string(L), "{\"id\":5,\"op\":\"~w\",\"args\":~s}", [Op, Args]), once(procesar_linea(L, R)).
+limpio(Ruta) :- historial:ruta_registros(Def), nb_setval(ruta_x, Def),
+    tmp_file(registros, B), atom_concat(B, '/datos/registros.txt', Ruta), usar_registros(Ruta).
+restaurar(_) :- nb_getval(ruta_x, Def), usar_registros(Def), retractall(vehiculo:vehiculo(_, _, _, _, _, _)).
+
+test(explicar_sin_diagnostico, [setup(limpio(_)), cleanup(restaurar(_))]) :-
+    pedir_x(explicar, "{}", R), R.estado == error, R.error.codigo == sin_diagnostico,
+    R.error.mensaje == "Primero genere un diagnóstico".
+test(explicar_el_ultimo, [setup(limpio(_)), cleanup(restaurar(_))]) :-
+    pedir_x(diagnosticar, "{\"sintomas\":{\"chirrido_frenos\":\"presente\"}}", _),
+    pedir_x(explicar, "{}", R), R.estado == ok, [X] = R.resultados,
+    contiene(X.conclusion, "no concluyente"), X.traza = [_|_].
+test(explicar_uno_guardado_igual_que_el_actual, [setup(limpio(_)), cleanup(restaurar(_))]) :-
+    pedir_x(registrar_vehiculo, "{\"marca\":\"Toyota\",\"modelo\":\"Corolla\",\"anio\":2015,\"cilindrada\":\"1.8 L\",\"combustible\":\"gasolina\",\"kilometraje\":120000}", _),
+    pedir_x(diagnosticar, "{\"sintomas\":{\"chirrido_frenos\":\"presente\",\"pedal_freno_esponjoso\":\"presente\"},\"hallazgos\":{\"hall_medir_espesor_pastillas_freno\":\"normal\",\"hall_revisar_nivel_estado_liquido_frenos\":\"severo\",\"hall_inspeccionar_disco_rayaduras_alabeo\":\"normal\"}}", _),
+    pedir_x(explicar, "{}", R1), pedir_x(guardar_diagnostico, "{}", _),
+    historial:ruta_registros(Ruta), usar_registros(Ruta),          % reabrir: memoria vacía
+    pedir_x(explicar, "{\"id\":1}", R2), R2.estado == ok,
+    json_texto(R1.resultados, J1), json_texto(R2.resultados, J2), J1 == J2.
+json_texto(D, S) :- with_output_to(string(S), json_write_dict(current_output, D, [width(0)])).
+test(explicar_id_invalido_o_inexistente, [setup(limpio(_)), cleanup(restaurar(_))]) :-
+    pedir_x(explicar, "{\"id\":\"x\"}", R1), R1.error.codigo == entrada_invalida,
+    pedir_x(explicar, "{\"id\":3}", R2), R2.error.codigo == no_encontrado.
+:- end_tests(explicacion).
