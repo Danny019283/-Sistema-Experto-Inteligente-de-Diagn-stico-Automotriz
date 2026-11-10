@@ -332,12 +332,60 @@ static void n6_pruebas_tras_caida(void) {
     controlador_cerrar(&k);
 }
 
+static void i7_acciones(void) {
+    puts("I7 · F09: acciones_correctivas (PDF §6)");
+    Controlador k; listo(&k, SERVIDOR);
+    controlador_acciones(&k);
+    CHECK(!k.hay_acc && strstr(k.aviso_acc, "Primero genere un diagnóstico"), "sin diagnóstico: mensaje");
+    sintomas_pdf(&k);
+    controlador_diagnosticar(&k);
+    controlador_acciones(&k);
+    CHECK(k.hay_acc && k.acc.n == 0 && k.acc.n_confirmados == 0 &&
+          strstr(k.acc.mensaje, "Sin acciones: ningún componente confirmado"),
+          "sin confirmados: Sin acciones y el motivo");
+    CHECK(strstr(k.acc.mensaje, "pantalla Pruebas") != NULL, "remite a las pruebas recomendadas");
+    controlador_hallazgo(&k, "hall_medir_espesor_pastillas_freno", "normal");
+    controlador_hallazgo(&k, "hall_revisar_nivel_estado_liquido_frenos", "severo");
+    controlador_hallazgo(&k, "hall_inspeccionar_disco_rayaduras_alabeo", "normal");
+    controlador_diagnosticar(&k);
+    CHECK(!k.hay_acc && !k.acc_al_dia, "un diagnóstico nuevo invalida las acciones mostradas");
+    controlador_acciones(&k);
+    CHECK(k.hay_acc && k.acc.n >= 2 && !strcmp(k.acc.items[0].id, "purgar_cambiar_liquido_frenos") &&
+          cerca(k.acc.items[0].relevancia, 0.88, 0.01), "Purgar y cambiar líquido ≈88 %");
+    CHECK(!strcmp(k.acc.items[1].id, "revisar_fugas_circuito_frenos") &&
+          cerca(k.acc.items[1].relevancia, 0.47, 0.01), "Revisar fugas del circuito ≈47 %");
+    CHECK(k.acc.items[0].n_origen == 1 && !strcmp(k.acc.items[0].origen[0].id, "liquido_frenos"),
+          "cada acción trae el componente confirmado que la origina");
+    int de_descartado = 0;
+    for (int i = 0; i < k.acc.n; i++)
+        for (int j = 0; j < k.acc.items[i].n_origen; j++)
+            if (comp(&k.diag, k.acc.items[i].origen[j].id)->estado != COMP_CONFIRMADO) de_descartado = 1;
+    CHECK(!de_descartado, "ninguna acción viene de un componente no confirmado");
+    controlador_cerrar(&k);
+}
+
+static void n7_acciones_error(void) {
+    puts("N7 · F09: error de Prolog al pedir acciones, sin cerrar");
+    Controlador k; listo(&k, SERVIDOR);
+    sintomas_pdf(&k);
+    controlador_diagnosticar(&k);
+    controlador_accion(&k, "matar");
+    controlador_acciones(&k);
+    CHECK(!k.hay_acc && k.aviso_acc_error && k.hay_error, "con swipl caído: aviso de error y nada que dibujar");
+    controlador_cerrar(&k);
+    k.hay_error = 0;
+    controlador_probar_conexion(&k);
+    controlador_acciones(&k);
+    CHECK(!k.hay_error && k.hay_acc, "al reconectar las acciones se vuelven a pedir");
+    controlador_cerrar(&k);
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     if (!conexion_swipl_disponible()) { puts("Falta swipl."); return 1; }
     i1_catalogo(); i2_seleccion(); i3_diagnosticar(); i4_rb1_rb3(); i5_rb2();
     n1_validacion(); n2_json_malformado(); n3_swipl_caido(); n4_kb_invalida(); n5_sin_hipotesis();
-    i6_pruebas(); n6_pruebas_tras_caida();
+    i6_pruebas(); n6_pruebas_tras_caida(); i7_acciones(); n7_acciones_error();
     printf("\npruebas_integracion: %d verificaciones, %d fallos\n", total, fallos);
     return fallos ? 1 : 0;
 }

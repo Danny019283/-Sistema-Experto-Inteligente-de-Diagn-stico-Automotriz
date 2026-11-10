@@ -117,7 +117,7 @@ static void reponer_sesion(Controlador *k) {
         cJSON *r;
         llamar_crudo(k, "diagnosticar", args_diagnostico(k), &r);
         cJSON_Delete(r);
-        k->rec_al_dia = 0;
+        k->rec_al_dia = k->acc_al_dia = 0;
     }
 }
 
@@ -259,6 +259,7 @@ static void enviar_seleccion(Controlador *k, const char *op, cJSON *args) {
         k->hay_diag = 0;                 /* el diagnóstico mostrado ya no corresponde a la selección */
         k->aviso_diag[0] = '\0';
         k->hay_rec = k->rec_al_dia = 0;  /* F07: tampoco las pruebas recomendadas */
+        k->hay_acc = k->acc_al_dia = 0;  /* F09: ni las acciones */
     } else if (l == LL_ERR_PROLOG) {     /* RNF-02: la selección previa no se altera */
         texto(k->aviso, sizeof k->aviso, k->mensaje);
     }
@@ -316,7 +317,9 @@ void controlador_diagnosticar(Controlador *k) {
     k->hay_diag = 0;
     k->aviso_diag[0] = '\0';
     k->hay_rec = k->rec_al_dia = 0;      /* F07: las pruebas se vuelven a pedir para el nuevo */
+    k->hay_acc = k->acc_al_dia = 0;      /* F09: las acciones también */
     k->aviso_pruebas[0] = '\0';
+    k->aviso_acc[0] = '\0';
     if (!k->catalogo_ok) {
         aviso_diag(k, 1, "No hay catálogo de síntomas: no se puede diagnosticar.");
         return;
@@ -431,6 +434,7 @@ int controlador_registrar_resultado(Controlador *k, const char *prueba, const ch
         return 1;
     }
     k->hay_diag = 1;
+    k->acc_al_dia = 0;                   /* F09: las acciones cambian con el diagnóstico nuevo */
     k->aviso_diag[0] = '\0';
     char nombre[NOMBRE_LEN];
     texto(nombre, sizeof nombre, k->rec.pendiente.nombre);
@@ -441,6 +445,41 @@ int controlador_registrar_resultado(Controlador *k, const char *prueba, const ch
         aviso_pruebas(k, 0, m);
     }
     return 1;
+}
+
+/* ---------------------------------------------------------------- F09 ---- */
+
+static void aviso_acc(Controlador *k, int es_error, const char *txt) {
+    k->aviso_acc_error = es_error;
+    texto(k->aviso_acc, sizeof k->aviso_acc, txt);
+}
+
+void controlador_acciones(Controlador *k) {
+    char err[256] = "";
+    k->acc_al_dia = 1;                   /* un intento por diagnóstico; el botón Actualizar repite */
+    k->hay_acc = 0;
+    k->aviso_acc[0] = '\0';
+    if (!k->hay_diag) {                  /* RNF-01: sin diagnóstico no se pide nada */
+        aviso_acc(k, 0, "Primero genere un diagnóstico.");
+        return;
+    }
+    cJSON *resp;
+    Llamada l = llamar(k, "acciones_correctivas", NULL, &resp);
+    if (l == LL_OK) {
+        if (acciones_parsear(&k->acc, cJSON_GetObjectItemCaseSensitive(resp, "resultados"),
+                             err, sizeof err) < 0) {
+            char m[600];
+            snprintf(m, sizeof m, "Respuesta inválida de Prolog, no se muestra: %s", err);
+            aviso_acc(k, 1, m);
+        } else {
+            k->hay_acc = 1;
+        }
+    } else if (l == LL_SIN_RES) {
+        aviso_acc(k, 1, "Prolog no devolvió las acciones.");
+    } else {
+        aviso_acc(k, 1, k->mensaje);     /* RNF-02: se muestra el error sin cerrar la aplicación */
+    }
+    cJSON_Delete(resp);
 }
 
 /* ---------------------------------------------------------------- F11 ---- */
@@ -481,6 +520,7 @@ int controlador_accion(Controlador *k, const char *accion) {
     else if (!strcmp(buf, "diagnosticar"))     controlador_diagnosticar(k);
     else if (!strcmp(buf, "cancelar"))         controlador_cancelar_contradiccion(k);
     else if (!strcmp(buf, "recomendar"))       controlador_recomendar_pruebas(k);
+    else if (!strcmp(buf, "acciones"))         controlador_acciones(k);
     else if (!strcmp(buf, "matar")) {          /* simula la caída de swipl */
         if (k->con.pid > 0) { kill(k->con.pid, SIGKILL); usleep(150000); }
     } else if (!strcmp(buf, "quitar") && arg)  controlador_quitar(k, arg);

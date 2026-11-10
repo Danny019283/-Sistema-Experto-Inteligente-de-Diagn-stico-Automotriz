@@ -1323,3 +1323,69 @@ test(textos_sin_simbolos_especiales, [setup(limpio_p(_)), cleanup(restaurar_p(_)
     inicial, recomendadas(X), json_p(X, S),
     forall(member(C, ["«", "»", "≤", "≥", "×"]), \+ sub_string(S, _, _, _, C)).
 :- end_tests(pruebas_adicionales).
+
+% ---------------------------------------------------------------------------
+% F09 acciones correctivas: Ra = 1 - prod(1 - P*Maj) sobre los confirmados (PDF §2.3, R9).
+% ---------------------------------------------------------------------------
+:- begin_tests(acciones_correctivas).
+:- use_module('../backend/acciones').
+:- use_module('../backend/historial').
+pedir_a(Op, Args, R) :-
+    format(string(L), "{\"id\":8,\"op\":\"~w\",\"args\":~s}", [Op, Args]), once(procesar_linea(L, R)).
+limpio_a(_) :- historial:ruta_registros(Def), nb_setval(ruta_a, Def),
+    tmp_file(registros, B), atom_concat(B, '/datos/registros.txt', Ruta), usar_registros(Ruta).
+restaurar_a(_) :- nb_getval(ruta_a, Def), usar_registros(Def).
+pdf_completo :-
+    pedir_a(diagnosticar, "{\"sintomas\":{\"chirrido_frenos\":\"presente\",\"pedal_freno_esponjoso\":\"presente\"},\"hallazgos\":{\"hall_medir_espesor_pastillas_freno\":\"normal\",\"hall_revisar_nivel_estado_liquido_frenos\":\"severo\",\"hall_inspeccionar_disco_rayaduras_alabeo\":\"normal\"}}", R),
+    R.estado == ok.
+acciones_x(X) :- pedir_a(acciones_correctivas, "{}", R), R.estado == ok, R.resultados = [X].
+ids(X, Ids) :- findall(A, ( member(D, X.acciones), A = D.accion ), Ids).
+tiene_a(T, P) :- once(sub_string(T, _, _, _, P)).
+
+test(acciones_sin_diagnostico, [setup(limpio_a(_)), cleanup(restaurar_a(_))]) :-
+    pedir_a(acciones_correctivas, "{}", R), R.error.codigo == sin_diagnostico.
+test(acciones_del_pdf, [setup(limpio_a(_)), cleanup(restaurar_a(_))]) :-
+    pdf_completo, acciones_x(X),
+    X.acciones = [A, B|_],
+    A.accion == purgar_cambiar_liquido_frenos, abs(A.relevancia - 0.885) < 0.005,   % PDF: ~88 %
+    B.accion == revisar_fugas_circuito_frenos, abs(B.relevancia - 0.466) < 0.005,   % PDF: ~47 %
+    A.componentes = [O], O.id == liquido_frenos, O.efectividad =:= 0.95,
+    tiene_a(A.texto, "relevancia 88,5 %"),
+    X.confirmados = [C], C.id == liquido_frenos,
+    X.mensaje == "2 acciones para 1 componente confirmado, de mayor a menor relevancia.".
+test(ordenadas_por_ra, [setup(limpio_a(_)), cleanup(restaurar_a(_))]) :-
+    pdf_completo, acciones_x(X),
+    findall(R, ( member(D, X.acciones), R = D.relevancia ), Rs),
+    msort(Rs, Asc), reverse(Asc, Rs),
+    forall(member(R, Rs), ( R >= 0, R =< 1 )).
+test(sin_confirmados_remite_a_pruebas, [setup(limpio_a(_)), cleanup(restaurar_a(_))]) :-
+    pedir_a(diagnosticar, "{\"sintomas\":{\"chirrido_frenos\":\"presente\",\"pedal_freno_esponjoso\":\"presente\"}}", _),
+    acciones_x(X), X.acciones == [], X.confirmados == [],
+    tiene_a(X.mensaje, "Sin acciones: ningún componente confirmado"),
+    tiene_a(X.mensaje, "Medir el espesor de las pastillas de freno").
+test(descartados_no_generan_acciones) :-
+    Res = _{motivo: sin_inciertos, pruebas_sugeridas: [],
+            componentes: [_{id: pastillas_freno, estado: descartado, probabilidad: 0.039},
+                          _{id: liquido_frenos, estado: confirmado, probabilidad: 0.93}]},
+    acciones_de(Res, X), ids(X, Ids),
+    \+ ( member(A, Ids), accion_componente(A, pastillas_freno, _),
+         \+ accion_componente(A, liquido_frenos, _) ).
+test(solo_confirmados_existentes) :-
+    Res = _{motivo: sin_inciertos, pruebas_sugeridas: [],
+            componentes: [_{id: no_existe, estado: confirmado, probabilidad: 0.99},
+                          _{id: liquido_frenos, estado: confirmado, probabilidad: 0.5}]},
+    acciones_de(Res, X), X.acciones == [], X.confirmados == [].
+test(orden_cambia_con_la_kb, [setup(limpio_a(_)), cleanup(restaurar_a(_))]) :-
+    pdf_completo,
+    setup_call_cleanup(
+        ( retract(user:accion_componente(revisar_fugas_circuito_frenos, liquido_frenos, M0)),
+          assertz(user:accion_componente(revisar_fugas_circuito_frenos, liquido_frenos, 0.99)) ),
+        ( acciones_x(X), ids(X, [Primera|_]) ),
+        ( retract(user:accion_componente(revisar_fugas_circuito_frenos, liquido_frenos, 0.99)),
+          assertz(user:accion_componente(revisar_fugas_circuito_frenos, liquido_frenos, M0)) )),
+    Primera == revisar_fugas_circuito_frenos.
+test(acciones_sin_simbolos_especiales, [setup(limpio_a(_)), cleanup(restaurar_a(_))]) :-
+    pdf_completo, acciones_x(X),
+    with_output_to(string(S), json_write_dict(current_output, X, [width(0)])),
+    forall(member(C, ["«", "»", "≤", "≥", "×"]), \+ sub_string(S, _, _, _, C)).
+:- end_tests(acciones_correctivas).

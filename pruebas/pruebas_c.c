@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "acciones.h"
 #include "diagnostico.h"
 #include "pruebas_adicionales.h"
 #include "sintomas.h"
@@ -138,6 +139,40 @@ int main(void) {
         cJSON_Delete(j);
         CHECK(!strcmp(resultado_prueba_texto("severo"), "Severo") && resultado_prueba_valido("leve") &&
               !resultado_prueba_valido("presente"), "resultados normal/leve/severo");
+    }
+
+    puts("acciones_parsear (F09, RNF-01: Ra en [0, 1] y solo de confirmados)");
+    {
+        Acciones ac;
+        memset(&ac, 0, sizeof ac);
+#define ORIG "{\"id\":\"c1\",\"nombre\":\"C1\",\"probabilidad\":0.93,\"efectividad\":0.95}"
+#define ACC(id, ra, comps) "{\"accion\":\"" id "\",\"nombre\":\"N\",\"relevancia\":" ra \
+    ",\"componentes\":[" comps "],\"texto\":\"T\"}"
+#define ACS(acs, conf) "[{\"acciones\":[" acs "],\"confirmados\":[" conf "],\"mensaje\":\"M\"}]"
+#define CONF "{\"id\":\"c1\",\"nombre\":\"C1\",\"probabilidad\":0.93}"
+        cJSON *j = cJSON_Parse(ACS(ACC("b", "0.47", ORIG) "," ACC("a", "0.88", ORIG), CONF));
+        CHECK(acciones_parsear(&ac, j, err, sizeof err) == 0 && ac.n == 2 && ac.n_confirmados == 1,
+              "respuesta válida se acepta");
+        CHECK(!strcmp(ac.items[0].id, "a") && ac.items[0].origen[0].efectividad == 0.95,
+              "se ordena por Ra descendente y trae el origen");
+        cJSON_Delete(j);
+        j = cJSON_Parse(ACS(ACC("a", "1.2", ORIG), CONF));
+        CHECK(acciones_parsear(&ac, j, err, sizeof err) < 0 && strstr(err, "[0, 1]") && ac.n == 2,
+              "Ra fuera de [0, 1] se rechaza y no pisa la anterior");
+        cJSON_Delete(j);
+        j = cJSON_Parse(ACS(ACC("a", "0.5", ""), CONF));
+        CHECK(acciones_parsear(&ac, j, err, sizeof err) < 0, "acción sin componentes de origen se rechaza");
+        cJSON_Delete(j);
+        j = cJSON_Parse(ACS(ACC("a", "0.5", ORIG), ""));
+        CHECK(acciones_parsear(&ac, j, err, sizeof err) < 0, "acciones sin confirmados se rechazan");
+        cJSON_Delete(j);
+        j = cJSON_Parse(ACS(ACC("a", "0.5", "{\"id\":\"c1\",\"nombre\":\"C1\",\"probabilidad\":0.9,\"efectividad\":3}"), CONF));
+        CHECK(acciones_parsear(&ac, j, err, sizeof err) < 0, "efectividad fuera de [0, 1] se rechaza");
+        cJSON_Delete(j);
+        j = cJSON_Parse(ACS("", ""));
+        CHECK(acciones_parsear(&ac, j, err, sizeof err) == 0 && ac.n == 0 && !strcmp(ac.mensaje, "M"),
+              "sin acciones se acepta con su mensaje");
+        cJSON_Delete(j);
     }
 
     printf("\npruebas_c: %d verificaciones, %d fallos\n", total, fallos);

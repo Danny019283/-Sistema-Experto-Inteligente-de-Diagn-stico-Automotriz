@@ -64,7 +64,7 @@ Respuesta:
   `limpiar_sintomas`, `fijar_seleccion`, `resolver_contradiccion` y `cancelar_contradiccion`
   («Síntomas y contradicciones»); `guardar_diagnostico`, `listar_diagnosticos` y
   `cargar_diagnostico` (historial, F10); `explicar` (F08); `recomendar_pruebas` y
-  `registrar_resultado_prueba` (F07).
+  `registrar_resultado_prueba` (F07); `acciones_correctivas` (F09).
 
 ### `diagnosticar`
 
@@ -176,6 +176,19 @@ Trabajan sobre el último `diagnosticar` (`backend/pruebas_adicionales.pl`, regl
 Errores (el diagnóstico anterior no cambia): `sin_diagnostico`, `entrada_invalida` (prueba
 inexistente, resultado inválido, falta un argumento), `ya_registrada`, `prueba_no_pendiente`
 (el mensaje dice cuál es la pendiente, o que no hay ninguna).
+
+### `acciones_correctivas` (F09)
+
+Acciones del último `diagnosticar` (`backend/acciones.pl`, capa 3 y regla R9):
+`Ra = 1 − Π(1 − P(Cj|S)·Maj)` solo sobre los componentes **confirmados** que existen en la KB
+(las efectividades `Maj` se leen de la KB en cada petición). `resultados[0]`:
+- `acciones`: de mayor a menor Ra, cada una con `accion, nombre, relevancia, texto` y
+  `componentes` (`id, nombre, probabilidad, efectividad`: los confirmados que la originan).
+- `confirmados`: `id, nombre, probabilidad`.
+- `mensaje`: resumen; sin confirmados, "Sin acciones: ningún componente confirmado." y qué hacer
+  (registrar la prueba recomendada, corregir una contradicción o revisar las pruebas).
+
+Errores: `sin_diagnostico`.
 
 El cliente C correlaciona la respuesta por `id` y trata swipl caído / timeout (5 s) /
 respuesta inválida como error de conexión, mostrado en la ventana con botón «Reintentar».

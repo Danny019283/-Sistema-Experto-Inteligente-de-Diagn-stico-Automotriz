@@ -444,6 +444,62 @@ static void pantalla_pruebas(struct nk_context *ctx, Controlador *k) {
     }
 }
 
+/* ----------------------------------------------------------------------- F09 ---- */
+
+/* Una acción: nombre, barra de Ra con su porcentaje y los confirmados que la originan. */
+static void fila_accion(struct nk_context *ctx, int i, const Accion *a) {
+    char t[NOMBRE_LEN + 8], pct[24];
+    snprintf(t, sizeof t, "%d. %s", i + 1, a->nombre);
+    nk_layout_row_dynamic(ctx, 24, 1);
+    nk_label(ctx, t, NK_TEXT_LEFT);
+    float r[] = { 0.70f, 0.30f };
+    nk_layout_row(ctx, NK_DYNAMIC, 22, 2, r);
+    barra_prob(ctx, a->relevancia, VERDE);
+    snprintf(pct, sizeof pct, "Ra %.1f %%", a->relevancia * 100.0);
+    nk_label(ctx, pct, NK_TEXT_RIGHT);
+    for (int j = 0; j < a->n_origen; j++) {
+        const OrigenAccion *o = &a->origen[j];
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_labelf_colored(ctx, NK_TEXT_LEFT, GRIS, "    Origen: %s (P = %.1f %%, efectividad %.2f)",
+                          o->nombre, o->probabilidad * 100.0, o->efectividad);
+    }
+}
+
+/* F09 · paso 16: acciones correctivas de los componentes confirmados, de mayor a menor Ra. */
+static void pantalla_acciones(struct nk_context *ctx, Controlador *k, Menu *m) {
+    if (k->hay_diag && !k->acc_al_dia) controlador_acciones(k);   /* al entrar o si cambió */
+    nk_layout_row_dynamic(ctx, 34, 1);
+    if (nk_button_label(ctx, "Actualizar acciones")) controlador_acciones(k);
+    if (k->aviso_acc[0]) {               /* RNF-02: error de Prolog, sin cerrar la aplicación */
+        nk_layout_row_dynamic(ctx, 60, 1);
+        nk_label_colored_wrap(ctx, k->aviso_acc, k->aviso_acc_error ? ROJO : AMBAR);
+    }
+    if (!k->hay_acc) return;
+    const Acciones *a = &k->acc;
+    if (a->n == 0) {                     /* sin confirmados: el motivo y remitir a Pruebas */
+        nk_layout_row_dynamic(ctx, 36, 1);
+        insignia(ctx, "SIN ACCIONES", AMBAR);
+        nk_layout_row_dynamic(ctx, 66, 1);
+        nk_label_colored_wrap(ctx, a->mensaje, AMBAR);
+        if (!k->diag.concluyente && k->diag.prueba_sugerida[0]) {
+            nk_layout_row_dynamic(ctx, 36, 1);
+            if (nk_button_label(ctx, "Ir a Pruebas")) menu_ir(m, PANT_PRUEBAS);
+        }
+        return;
+    }
+    nk_layout_row_dynamic(ctx, 26, 1);
+    nk_label_colored(ctx, a->mensaje, NK_TEXT_LEFT, nk_rgb(180, 180, 180));
+    float alto = nk_window_get_content_region(ctx).h - 30 - 34 - 26 - 16 - (k->aviso_acc[0] ? 64.0f : 0.0f);
+    if (alto < 220) alto = 220;
+    nk_layout_row_dynamic(ctx, alto, 1);
+    if (nk_group_begin(ctx, "Acciones correctivas (por relevancia Ra)", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
+        for (int i = 0; i < a->n; i++) fila_accion(ctx, i, &a->items[i]);
+        nk_layout_row_dynamic(ctx, 44, 1);
+        nk_label_colored_wrap(ctx, "Son recomendaciones del sistema experto, no una certeza: confírmelas con un técnico.", GRIS);
+        nk_group_end(ctx);
+    }
+}
+
 /* F11 · RB2: «Marcaste X e Y, que son incompatibles. ¿Cuál es correcta?» */
 static void dialogo_contradiccion(struct nk_context *ctx, Controlador *k, int w, int h) {
     struct nk_rect r = nk_rect(w / 2.0f - 380, h / 2.0f - 150, 760, 300);
@@ -469,7 +525,7 @@ static void dialogo_contradiccion(struct nk_context *ctx, Controlador *k, int w,
     }
 }
 
-/* Contenido de cada pantalla; las de F08-F10 y F13 siguen pendientes. */
+/* Contenido de cada pantalla; Explicación (F08) y Reporte (F13) siguen pendientes. */
 static void pantalla(struct nk_context *ctx, Controlador *k, Menu *m) {
     nk_layout_row_dynamic(ctx, 30, 1);
     nk_label(ctx, menu_titulo(m->actual), NK_TEXT_LEFT);
@@ -480,6 +536,7 @@ static void pantalla(struct nk_context *ctx, Controlador *k, Menu *m) {
     if (m->actual == PANT_SINTOMAS) { pantalla_sintomas(ctx, k, m); return; }
     if (m->actual == PANT_DIAGNOSTICO) { pantalla_diagnostico(ctx, k, m); return; }
     if (m->actual == PANT_PRUEBAS) { pantalla_pruebas(ctx, k); return; }
+    if (m->actual == PANT_ACCIONES) { pantalla_acciones(ctx, k, m); return; }
     nk_label_wrap(ctx, "Pantalla pendiente de implementar.");
 }
 

@@ -1,6 +1,7 @@
 #ifndef CONTROLADOR_H
 #define CONTROLADOR_H
 
+#include "acciones.h"
 #include "conexion.h"
 #include "diagnostico.h"
 #include "pruebas_adicionales.h"
@@ -49,6 +50,12 @@ typedef struct {
     int rec_al_dia;             /* 0: el diagnóstico cambió y hay que volver a pedir las pruebas */
     char aviso_pruebas[4096];   /* resultado registrado / error de Prolog ("" = ninguno) */
     int aviso_pruebas_error;
+    /* F09 · acciones correctivas del diagnóstico actual (las calcula Prolog, R9). */
+    Acciones acc;
+    int hay_acc;
+    int acc_al_dia;             /* 0: el diagnóstico cambió y hay que volver a pedirlas */
+    char aviso_acc[4096];       /* error de Prolog / respuesta inválida ("" = ninguno) */
+    int aviso_acc_error;
     /* F11 · RB2 */
     Contradiccion contra;
 } Controlador;
@@ -87,13 +94,18 @@ void controlador_recomendar_pruebas(Controlador *k);
  * nada y el motivo queda en k->aviso_pruebas. Devuelve 1 si quedó registrado. */
 int controlador_registrar_resultado(Controlador *k, const char *prueba, const char *resultado);
 
+/* ---- F09 · acciones correctivas ---- */
+/* Pide acciones_correctivas para el diagnóstico actual; sin diagnóstico no llama a Prolog. Con
+ * error o respuesta inválida no se muestra nada y el motivo queda en k->aviso_acc. */
+void controlador_acciones(Controlador *k);
+
 /* ---- F11 · RB2: contradicción entre síntomas ---- */
 void controlador_resolver(Controlador *k, const char *id_elegido);
 void controlador_cancelar_contradiccion(Controlador *k);
 
 /* Acciones por texto (demos y evidencia de pruebas): "marcar:id=estado", "quitar:id", "limpiar",
  * "catalogo", "diagnosticar", "hallazgo:hall_x=estado", "resolver:id", "cancelar", "matar",
- * "recomendar", "registrar:prueba=resultado" (F07).
+ * "recomendar", "registrar:prueba=resultado" (F07), "acciones" (F09).
  * 0 ok, -1 si es desconocida o está mal formada. */
 int controlador_accion(Controlador *k, const char *accion);
 
