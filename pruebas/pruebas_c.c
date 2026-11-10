@@ -108,7 +108,7 @@ int main(void) {
         memset(&rec, 0, sizeof rec);
 #define PEND(rp, res) "{\"prueba\":\"p1\",\"nombre\":\"Prueba 1\",\"componente\":\"c1\"," \
     "\"nombre_componente\":\"Comp 1\",\"relevancia\":" rp ",\"resultados\":[" res "],\"texto\":\"Se sugiere\"}"
-#define REC(pend, hechas) "[{\"pendiente\":" pend ",\"otras\":[],\"realizadas\":[" hechas "]," \
+#define REC(pend, hechas) "[{\"pendiente\":" pend ",\"del_foco\":[],\"otras\":[],\"realizadas\":[" hechas "]," \
     "\"mensaje\":\"M\",\"iteraciones\":1,\"max_iteraciones\":5}]"
 #define HECHA(res) "{\"prueba\":\"p0\",\"nombre\":\"P0\",\"componente\":\"c0\",\"nombre_componente\":\"C0\",\"resultado\":\"" res "\"}"
         cJSON *j = cJSON_Parse(REC(PEND("0.7", "\"normal\",\"leve\",\"severo\""), HECHA("leve")));
@@ -133,7 +133,7 @@ int main(void) {
               !recomendacion_acepta(&rec, "normal") && !strcmp(rec.mensaje, "M"),
               "sin pendiente (null) se acepta con su mensaje");
         cJSON_Delete(j);
-        j = cJSON_Parse("[{\"pendiente\":null,\"otras\":[],\"realizadas\":[],\"iteraciones\":0,\"max_iteraciones\":5}]");
+        j = cJSON_Parse("[{\"pendiente\":null,\"del_foco\":[],\"otras\":[],\"realizadas\":[],\"iteraciones\":0,\"max_iteraciones\":5}]");
         CHECK(recomendacion_parsear(&rec, j, err, sizeof err) < 0, "sin 'mensaje' se rechaza");
         cJSON_Delete(j);
         CHECK(!strcmp(resultado_prueba_texto("severo"), "Severo") && resultado_prueba_valido("leve") &&

@@ -25,7 +25,9 @@ typedef struct {
     PruebaInfo pendiente;
     char resultados[RESULTADOS_MAX][RESULTADO_LEN]; /* los que acepta la pendiente */
     int n_resultados;
-    PruebaInfo otras[PRUEBAS_MAX];
+    PruebaInfo del_foco[PRUEBAS_MAX];   /* las demás pruebas del componente en foco, por Rp */
+    int n_foco;
+    PruebaInfo otras[PRUEBAS_MAX];      /* la mejor prueba de cada otro candidato */
     int n_otras;
     PruebaInfo realizadas[PRUEBAS_MAX];
     int n_realizadas;

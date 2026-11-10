@@ -364,14 +364,19 @@ static void panel_recomendadas(struct nk_context *ctx, Controlador *k) {
         nk_layout_row_dynamic(ctx, 66, 1);
         nk_label_colored_wrap(ctx, rec->mensaje, k->diag.concluyente ? VERDE : AMBAR);
     }
+    if (rec->n_foco > 0) {
+        nk_layout_row_dynamic(ctx, 28, 1);
+        nk_label_colored(ctx, "OTRAS PRUEBAS DEL MISMO COMPONENTE", NK_TEXT_LEFT, AZUL);
+        for (int i = 0; i < rec->n_foco; i++) fila_prueba(ctx, &rec->del_foco[i]);
+    }
     nk_layout_row_dynamic(ctx, 28, 1);
-    nk_label_colored(ctx, "OTRAS PRUEBAS POSIBLES", NK_TEXT_LEFT, AZUL);
+    nk_label_colored(ctx, "PRUEBAS DE OTROS CANDIDATOS", NK_TEXT_LEFT, AZUL);
     if (rec->n_otras == 0) {
         nk_layout_row_dynamic(ctx, 22, 1);
         nk_label_colored(ctx, "No hay pruebas para otros candidatos.", NK_TEXT_LEFT, GRIS);
     }
     for (int i = 0; i < rec->n_otras; i++) fila_prueba(ctx, &rec->otras[i]);
-    if (rec->hay_pendiente && rec->n_otras > 0) {
+    if (rec->hay_pendiente && rec->n_otras + rec->n_foco > 0) {
         nk_layout_row_dynamic(ctx, 44, 1);
         nk_label_colored_wrap(ctx, "El sistema las pedirá en orden: primero registre la prueba recomendada.", GRIS);
     }

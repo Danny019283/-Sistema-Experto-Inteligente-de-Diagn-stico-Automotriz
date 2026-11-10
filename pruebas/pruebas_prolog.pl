@@ -1268,6 +1268,12 @@ test(registrar_actualiza_probabilidad, [setup(limpio_p(_)), cleanup(restaurar_p(
     D.hallazgo.resultado == normal, D.iteraciones == 1, D.max_iteraciones == 5,
     prob_p(R, pastillas_freno, P), abs(P - 0.039) < 0.001,     % PDF §6: 63 % -> 3,9 %
     member(C, D.componentes), C.id == pastillas_freno, C.sistema == 'Frenos', !.
+test(otras_pruebas_del_foco, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    inicial, recomendadas(X0),
+    findall(P, ( member(D, X0.del_foco), P = D.prueba ), Ps0), Ps0 == [inspeccionar_estado_pastillas_freno],
+    registrar(medir_espesor_pastillas_freno, normal, _), recomendadas(X1),
+    X1.pendiente.componente == liquido_frenos,
+    findall(P, ( member(D, X1.del_foco), P = D.prueba ), Ps1), Ps1 == [inspeccionar_fugas_lineas_freno].
 test(realizada_no_se_vuelve_a_sugerir, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
     inicial, registrar(medir_espesor_pastillas_freno, normal, _), recomendadas(X),
     X.pendiente.prueba == revisar_nivel_estado_liquido_frenos,
@@ -1279,7 +1285,7 @@ test(tres_resultados_concluyente, [setup(limpio_p(_)), cleanup(restaurar_p(_))])
     registrar(revisar_nivel_estado_liquido_frenos, severo, _),
     registrar(inspeccionar_disco_rayaduras_alabeo, normal, R),
     R.resultados = [D], D.concluyente == true, D.motivo == sin_inciertos, D.iteraciones == 3,
-    recomendadas(X), X.pendiente == null, X.otras == [], length(X.realizadas, 3),
+    recomendadas(X), X.pendiente == null, X.otras == [], X.del_foco == [], length(X.realizadas, 3),
     X.mensaje == "No hacen falta más pruebas: no quedan hipótesis abiertas por investigar.".
 test(traza_con_los_hallazgos, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
     inicial, registrar(medir_espesor_pastillas_freno, normal, _),

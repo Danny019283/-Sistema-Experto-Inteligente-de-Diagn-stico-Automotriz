@@ -107,10 +107,16 @@ int recomendacion_parsear(Recomendacion *rec, const cJSON *resultados, char *err
     }
 
     const cJSON *otras = cJSON_GetObjectItemCaseSensitive(r, "otras"), *o;
+    const cJSON *foco = cJSON_GetObjectItemCaseSensitive(r, "del_foco");
     const cJSON *hechas = cJSON_GetObjectItemCaseSensitive(r, "realizadas");
-    if (!cJSON_IsArray(otras) || !cJSON_IsArray(hechas)) {
-        snprintf(err, nerr, "faltan las listas 'otras' y 'realizadas'");
+    if (!cJSON_IsArray(otras) || !cJSON_IsArray(foco) || !cJSON_IsArray(hechas)) {
+        snprintf(err, nerr, "faltan las listas 'del_foco', 'otras' y 'realizadas'");
         return -1;
+    }
+    cJSON_ArrayForEach(o, foco) {
+        if (nuevo.n_foco >= PRUEBAS_MAX) break;                /* solo se muestran las primeras */
+        if (prueba_sugerida(o, &nuevo.del_foco[nuevo.n_foco], err, nerr) < 0) return -1;
+        nuevo.n_foco++;
     }
     cJSON_ArrayForEach(o, otras) {
         if (nuevo.n_otras >= PRUEBAS_MAX) break;               /* solo se muestran las primeras */

@@ -275,6 +275,8 @@ static void i6_pruebas(void) {
     CHECK(k.hay_rec && k.rec.hay_pendiente &&
           !strcmp(k.rec.pendiente.prueba, "medir_espesor_pastillas_freno"),
           "la prueba pendiente es la del foco (Pastillas)");
+    CHECK(k.rec.n_foco == 1 && !strcmp(k.rec.del_foco[0].prueba, "inspeccionar_estado_pastillas_freno"),
+          "lista la otra prueba de Pastillas (del_foco), sin la pendiente");
     CHECK(cerca(k.rec.pendiente.relevancia, 0.70, 0.001) && k.rec.n_resultados == 3,
           "con su Rp (70 %) y los tres resultados posibles");
     CHECK(!strcmp(k.rec.pendiente.nombre_componente, "Pastillas de freno") && k.rec.n_realizadas == 0,

@@ -1,8 +1,8 @@
 % F07 · Pruebas adicionales (issue #59; PDF §4 reglas R7-R8, paso 13; RF-08).
 %
 % Operaciones del contrato JSON (ver README):
-%   recomendar_pruebas {}                          -> [ {pendiente, otras, realizadas, mensaje,
-%                                                        iteraciones, max_iteraciones} ]
+%   recomendar_pruebas {}                          -> [ {pendiente, del_foco, otras, realizadas,
+%                                                        mensaje, iteraciones, max_iteraciones} ]
 %   registrar_resultado_prueba {prueba, resultado} -> [ diagnóstico nuevo (como `diagnosticar`)
 %                                                        + hallazgo:{id, prueba, resultado} ]
 % Las dos trabajan sobre el último `diagnosticar` que recuerda historial.pl (F10).
@@ -15,6 +15,7 @@
 :- module(pruebas_adicionales, [recomendar_pruebas/1, registrar_resultado_prueba/3,
                                 resultados_posibles/2]).
 :- use_module(reglas).
+:- use_module(inferencia, [pruebas_del_componente/4]).
 :- use_module(sistemas).
 :- use_module(historial).
 :- use_module(explicaciones).
@@ -34,14 +35,15 @@ servidor_json:ejecutar(registrar_resultado_prueba, Args, [R]) :-
 
 % ------------------------------------------------------------ recomendar --
 
-%% recomendar_pruebas(-R): la prueba pendiente, las de otros candidatos y las ya realizadas.
+%% recomendar_pruebas(-R): la prueba pendiente, las demás del mismo componente, las de otros
+% candidatos y las ya realizadas.
 % Sin diagnóstico calculado -> historial_error(sin_diagnostico, ...), como `explicar`.
 recomendar_pruebas(R) :-
     actual(Entrada, Res),
     once(recomendar(Entrada, Res, R)).            % un solo resultado: se cierran los puntos de elección
 
-recomendar(Entrada, Res, _{pendiente: Pend, otras: Otras, realizadas: Hechas, mensaje: M,
-                           iteraciones: Res.iteraciones, max_iteraciones: Max}) :-
+recomendar(Entrada, Res, _{pendiente: Pend, del_foco: Foco, otras: Otras, realizadas: Hechas,
+                           mensaje: M, iteraciones: Res.iteraciones, max_iteraciones: Max}) :-
     max_iteraciones(Res, Max),
     pruebas_texto(Res.pruebas_sugeridas, Entrada, Sug),
     (   Res.motivo == prueba_pendiente, Sug = [P0|Otras0]
@@ -49,7 +51,25 @@ recomendar(Entrada, Res, _{pendiente: Pend, otras: Otras, realizadas: Hechas, me
     ;   Pend = null, Otras0 = Sug, mensaje_sin_pendiente(Res, Max, M)
     ),
     otras(Otras0, Otras),
+    del_foco(Pend, Entrada, Res.pruebas_hechas, Foco),
     realizadas(Res.pruebas_hechas, Entrada, Hechas).
+
+%% del_foco(+Pendiente, +Entrada, +Hechas, -Lista): las otras pruebas que verifican el componente en
+% foco (prueba_componente/2), de mayor a menor Rp, sin la pendiente ni las ya realizadas. Si el foco
+% sigue incierto después de la pendiente, R7 pedirá la primera de esta lista.
+del_foco(null, _, _, []) :- !.
+del_foco(Pend, Entrada, Hechas, L) :-
+    C = Pend.componente,
+    pruebas_del_componente(C, Entrada, [Pend.prueba|Hechas], Rps),
+    sugeridas_de(Rps, C, Ds),
+    pruebas_texto(Ds, Entrada, Ts),
+    otras(Ts, L).
+
+%% sugeridas_de(+RpPruebas, +C, -Dicts): Rp-Prueba al formato de pruebas_sugeridas (recursión).
+sugeridas_de([], _, []).
+sugeridas_de([Rp-P|Ps], C, [_{prueba: P, nombre: N, componente: C, relevancia: Rp}|Ds]) :-
+    prueba(P, N),
+    sugeridas_de(Ps, C, Ds).
 
 max_iteraciones(Res, Max) :-
     ( get_dict(max_iteraciones, Res, Max) -> true ; parametro(max_iteraciones, Max) ).

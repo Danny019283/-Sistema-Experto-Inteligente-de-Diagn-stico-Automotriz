@@ -162,8 +162,8 @@ Trabajan sobre el último `diagnosticar` (`backend/pruebas_adicionales.pl`, regl
 
 - `recomendar_pruebas` (sin args) → `resultados[0]`: `pendiente` (la prueba que el ciclo pide
   ahora: `prueba, nombre, componente, nombre_componente, relevancia` (Rp), `resultados` válidos
-  según la KB y `texto`; `null` si no hay), `otras` (pruebas de los demás candidatos, mismo formato
-  sin `resultados`), `realizadas` (`prueba, nombre, componente, nombre_componente, resultado`, en
+  según la KB y `texto`; `null` si no hay), `del_foco` (las demás pruebas de ese componente por Rp,
+  sin las realizadas; mismo formato sin `resultados`), `otras` (la mejor de cada otro candidato), `realizadas` (`prueba, nombre, componente, nombre_componente, resultado`, en
   orden), `mensaje` (por qué se sugiere la pendiente o, sin pendiente, por qué no hacen falta más
   pruebas: sin hipótesis abiertas, máximo de iteraciones, sin pruebas o contradicción),
   `iteraciones` y `max_iteraciones`.
