@@ -1225,3 +1225,101 @@ test(explicar_id_invalido_o_inexistente, [setup(limpio(_)), cleanup(restaurar(_)
     pedir_x(explicar, "{\"id\":\"x\"}", R1), R1.error.codigo == entrada_invalida,
     pedir_x(explicar, "{\"id\":3}", R2), R2.error.codigo == no_encontrado.
 :- end_tests(explicacion).
+
+% ---------------------------------------------------------------------------
+% F07 pruebas adicionales: recomendar_pruebas y registrar_resultado_prueba (PDF §6, R7-R8).
+% ---------------------------------------------------------------------------
+:- begin_tests(pruebas_adicionales).
+:- use_module('../backend/pruebas_adicionales').
+:- use_module('../backend/historial').
+pedir_p(Op, Args, R) :-
+    format(string(L), "{\"id\":7,\"op\":\"~w\",\"args\":~s}", [Op, Args]), once(procesar_linea(L, R)).
+limpio_p(_) :- historial:ruta_registros(Def), nb_setval(ruta_p, Def),
+    tmp_file(registros, B), atom_concat(B, '/datos/registros.txt', Ruta), usar_registros(Ruta).
+restaurar_p(_) :- nb_getval(ruta_p, Def), usar_registros(Def).
+% Diagnóstico inicial del PDF §6 (solo los dos síntomas; las pruebas se registran después).
+inicial :-
+    pedir_p(diagnosticar,
+            "{\"sintomas\":{\"chirrido_frenos\":\"presente\",\"pedal_freno_esponjoso\":\"presente\"}}", R),
+    R.estado == ok.
+registrar(P, Est, R) :-
+    format(string(A), "{\"prueba\":\"~w\",\"resultado\":\"~w\"}", [P, Est]),
+    pedir_p(registrar_resultado_prueba, A, R).
+recomendadas(X) :- pedir_p(recomendar_pruebas, "{}", R), R.estado == ok, R.resultados = [X].
+prob_p(R, Id, P) :- member(C, R.resultados), !, member(K, C.componentes), K.id == Id, !, P = K.probabilidad.
+% tiene(+Texto, +Parte): una sola respuesta (sub_string/5 deja puntos de elección).
+tiene(T, P) :- once(sub_string(T, _, _, _, P)).
+json_p(D, S) :- with_output_to(string(S), json_write_dict(current_output, D, [width(0)])).
+actual_json(S) :- historial:diagnostico_actual(_, D), json_p(D, S).
+
+test(recomendar_sin_diagnostico, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    pedir_p(recomendar_pruebas, "{}", R), R.error.codigo == sin_diagnostico,
+    R.error.mensaje == "Primero genere un diagnóstico".
+test(pendiente_del_pdf, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    inicial, recomendadas(X),
+    P = X.pendiente, P.prueba == medir_espesor_pastillas_freno,
+    P.nombre_componente == 'Pastillas de freno', P.resultados == [normal, leve, severo],
+    abs(P.relevancia - 0.7) < 1.0e-9, X.realizadas == [], X.iteraciones == 0,
+    tiene(X.mensaje, "porque está presente: \"Los frenos chirrían\""),
+    X.otras = [O|_], O.prueba == revisar_nivel_estado_liquido_frenos.
+test(registrar_actualiza_probabilidad, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    inicial, registrar(medir_espesor_pastillas_freno, normal, R), R.estado == ok,
+    R.resultados = [D], D.hallazgo.id == hall_medir_espesor_pastillas_freno,
+    D.hallazgo.resultado == normal, D.iteraciones == 1, D.max_iteraciones == 5,
+    prob_p(R, pastillas_freno, P), abs(P - 0.039) < 0.001,     % PDF §6: 63 % -> 3,9 %
+    member(C, D.componentes), C.id == pastillas_freno, C.sistema == 'Frenos', !.
+test(otras_pruebas_del_foco, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    inicial, recomendadas(X0),
+    findall(P, ( member(D, X0.del_foco), P = D.prueba ), Ps0), Ps0 == [inspeccionar_estado_pastillas_freno],
+    registrar(medir_espesor_pastillas_freno, normal, _), recomendadas(X1),
+    X1.pendiente.componente == liquido_frenos,
+    findall(P, ( member(D, X1.del_foco), P = D.prueba ), Ps1), Ps1 == [inspeccionar_fugas_lineas_freno].
+test(realizada_no_se_vuelve_a_sugerir, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    inicial, registrar(medir_espesor_pastillas_freno, normal, _), recomendadas(X),
+    X.pendiente.prueba == revisar_nivel_estado_liquido_frenos,
+    \+ ( member(O, X.otras), O.prueba == medir_espesor_pastillas_freno ),
+    X.realizadas = [H], H.prueba == medir_espesor_pastillas_freno, H.resultado == normal.
+test(tres_resultados_concluyente, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    inicial,
+    registrar(medir_espesor_pastillas_freno, normal, _),
+    registrar(revisar_nivel_estado_liquido_frenos, severo, _),
+    registrar(inspeccionar_disco_rayaduras_alabeo, normal, R),
+    R.resultados = [D], D.concluyente == true, D.motivo == sin_inciertos, D.iteraciones == 3,
+    recomendadas(X), X.pendiente == null, X.otras == [], X.del_foco == [], length(X.realizadas, 3),
+    X.mensaje == "No hacen falta más pruebas: no quedan hipótesis abiertas por investigar.".
+test(traza_con_los_hallazgos, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    inicial, registrar(medir_espesor_pastillas_freno, normal, _),
+    pedir_p(explicar, "{}", R), R.resultados = [X],
+    once(( member(E, X.traza), sub_string(E.texto, _, _, _, "Medir el espesor") )).
+test(errores_no_cambian_el_estado, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    inicial, actual_json(Antes),
+    registrar(revisar_nivel_estado_liquido_frenos, severo, R1),
+    R1.error.codigo == prueba_no_pendiente,
+    tiene(R1.error.mensaje, "Medir el espesor de las pastillas de freno"),
+    registrar(medir_espesor_pastillas_freno, enorme, R2), R2.error.codigo == entrada_invalida,
+    registrar(no_existe, normal, R3), R3.error.codigo == entrada_invalida,
+    pedir_p(registrar_resultado_prueba, "{\"prueba\":\"medir_espesor_pastillas_freno\"}", R4),
+    R4.error.codigo == entrada_invalida,
+    actual_json(Despues), Antes == Despues.
+test(no_se_registra_dos_veces, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    inicial, registrar(medir_espesor_pastillas_freno, normal, _), actual_json(Antes),
+    registrar(medir_espesor_pastillas_freno, severo, R), R.error.codigo == ya_registrada,
+    actual_json(Despues), Antes == Despues.
+test(registrar_sin_diagnostico, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    registrar(medir_espesor_pastillas_freno, normal, R), R.error.codigo == sin_diagnostico.
+test(sin_pendiente_explica_por_que, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    pedir_p(diagnosticar, "{\"sintomas\":{\"no_arranca\":\"presente\",\"ralenti_inestable\":\"presente\"}}", _),
+    recomendadas(X), X.pendiente == null, X.mensaje \== "",
+    registrar(medir_espesor_pastillas_freno, normal, R), R.error.codigo == prueba_no_pendiente,
+    R.error.mensaje == "No hay ninguna prueba pendiente para este diagnóstico.".
+test(mensajes_por_motivo) :-
+    forall(member(M, [sin_inciertos, max_iteraciones, sin_pruebas, contradiccion]),
+           ( pruebas_adicionales:texto_motivo(M, 2, 5, T), string(T), T \== "" )),
+    once(pruebas_adicionales:texto_motivo(max_iteraciones, 5, 5, T5)),
+    tiene(T5, "máximo de 5 iteraciones").
+test(resultados_posibles_de_la_kb) :-
+    forall(prueba(P, _), ( resultados_posibles(P, Rs), Rs \== [] )).
+test(textos_sin_simbolos_especiales, [setup(limpio_p(_)), cleanup(restaurar_p(_))]) :-
+    inicial, recomendadas(X), json_p(X, S),
+    forall(member(C, ["«", "»", "≤", "≥", "×"]), \+ sub_string(S, _, _, _, C)).
+:- end_tests(pruebas_adicionales).

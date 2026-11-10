@@ -63,7 +63,8 @@ Respuesta:
   `consultar_vehiculo` (abajo); `catalogo_sintomas`, `marcar_sintoma`, `quitar_sintoma`,
   `limpiar_sintomas`, `fijar_seleccion`, `resolver_contradiccion` y `cancelar_contradiccion`
   («Síntomas y contradicciones»); `guardar_diagnostico`, `listar_diagnosticos` y
-  `cargar_diagnostico` (historial, F10); `explicar` (F08).
+  `cargar_diagnostico` (historial, F10); `explicar` (F08); `recomendar_pruebas` y
+  `registrar_resultado_prueba` (F07).
 
 ### `diagnosticar`
 
@@ -154,6 +155,27 @@ Sin args explica el último `diagnosticar`; con `{"id": N}`, uno guardado en el 
 - `pruebas`: las sugeridas, con los síntomas presentes que las hacen relevantes.
 
 Errores: `sin_diagnostico` («Primero genere un diagnóstico»), `no_encontrado`, `entrada_invalida`.
+
+### `recomendar_pruebas` / `registrar_resultado_prueba` (F07)
+
+Trabajan sobre el último `diagnosticar` (`backend/pruebas_adicionales.pl`, reglas R7-R8).
+
+- `recomendar_pruebas` (sin args) → `resultados[0]`: `pendiente` (la prueba que el ciclo pide
+  ahora: `prueba, nombre, componente, nombre_componente, relevancia` (Rp), `resultados` válidos
+  según la KB y `texto`; `null` si no hay), `del_foco` (las demás pruebas de ese componente por Rp,
+  sin las realizadas; mismo formato sin `resultados`), `otras` (la mejor de cada otro candidato), `realizadas` (`prueba, nombre, componente, nombre_componente, resultado`, en
+  orden), `mensaje` (por qué se sugiere la pendiente o, sin pendiente, por qué no hacen falta más
+  pruebas: sin hipótesis abiertas, máximo de iteraciones, sin pruebas o contradicción),
+  `iteraciones` y `max_iteraciones`.
+- `registrar_resultado_prueba {prueba, resultado}` (`normal | leve | severo`): agrega
+  `hall_<prueba>` a la entrada del último diagnóstico y vuelve a ejecutar el ciclo. Devuelve el
+  diagnóstico nuevo (igual que `diagnosticar`) con `hallazgo: {id, prueba, resultado}`; ese pasa
+  a ser el último diagnóstico (`explicar`, `guardar_diagnostico`). Solo se acepta la prueba
+  **pendiente**: el motor aplica un hallazgo únicamente cuando R7 pide esa prueba.
+
+Errores (el diagnóstico anterior no cambia): `sin_diagnostico`, `entrada_invalida` (prueba
+inexistente, resultado inválido, falta un argumento), `ya_registrada`, `prueba_no_pendiente`
+(el mensaje dice cuál es la pendiente, o que no hay ninguna).
 
 El cliente C correlaciona la respuesta por `id` y trata swipl caído / timeout (5 s) /
 respuesta inválida como error de conexión, mostrado en la ventana con botón «Reintentar».

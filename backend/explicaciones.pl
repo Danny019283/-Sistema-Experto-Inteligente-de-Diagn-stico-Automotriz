@@ -7,7 +7,8 @@
 % Los textos se arman con los nombres y números de la KB: si cambia un hecho, cambia el texto.
 % Las probabilidades se recalculan con el motor (inferencia.pl): la traza de reglas.pl dice qué
 % prueba se hizo y con qué resultado; aquí se reconstruye la memoria de trabajo X paso a paso.
-:- module(explicaciones, [explicar/3, eventos/3, texto_evento/2, porcentaje/2, aporte_texto/2]).
+:- module(explicaciones, [explicar/3, eventos/3, texto_evento/2, porcentaje/2, aporte_texto/2,
+                          pruebas_texto/3]).   % pruebas_texto lo reutiliza F07
 :- use_module(inferencia).
 :- use_module(reglas).
 
