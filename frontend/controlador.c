@@ -581,6 +581,57 @@ int controlador_abrir(Controlador *k, int id) {
     return ok;
 }
 
+/* ---------------------------------------------------------------- F13 ---- */
+
+static void aviso_rep(Controlador *k, int es_error, const char *txt) {
+    k->aviso_rep_error = es_error;
+    texto(k->aviso_rep, sizeof k->aviso_rep, txt);
+}
+
+int controlador_reporte(Controlador *k, int id) {
+    char err[256] = "", m[600];
+    k->rep_pedido = id;
+    k->hay_rep = 0;
+    k->aviso_rep[0] = '\0';
+    if (id <= 0) {                       /* RNF-01: solo de un diagnóstico guardado */
+        aviso_rep(k, 1, "Guarde el diagnóstico antes de generar el reporte.");
+        return 0;
+    }
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddNumberToObject(args, "id", id);
+    cJSON *resp;
+    Llamada l = llamar(k, "reporte_textual", args, &resp);
+    if (l == LL_OK) {
+        if (reporte_parsear(&k->rep, cJSON_GetObjectItemCaseSensitive(resp, "resultados"), err, sizeof err) < 0) {
+            snprintf(m, sizeof m, "No se puede mostrar el reporte: %s", err);
+            aviso_rep(k, 1, m);
+        } else {
+            k->hay_rep = 1;
+        }
+    } else {
+        aviso_rep(k, 1, l == LL_SIN_RES ? "Prolog no devolvió el reporte." : k->mensaje);
+    }
+    cJSON_Delete(resp);
+    return k->hay_rep;
+}
+
+int controlador_exportar(Controlador *k) {
+    char err[600] = "", ruta[512], m[1200];
+    if (!k->hay_rep) {
+        aviso_rep(k, 1, "No hay reporte que exportar: guarde el diagnóstico y genere el reporte.");
+        return 0;
+    }
+    const char *dir = getenv("SE_REPORTES");
+    if (!dir || !dir[0]) dir = REPORTES_DIR;
+    if (reporte_exportar(dir, k->rep.texto, time(NULL), ruta, sizeof ruta, err, sizeof err) < 0) {
+        aviso_rep(k, 1, err);            /* RNF-02: permisos, disco lleno, carpeta inválida */
+        return 0;
+    }
+    snprintf(m, sizeof m, "Reporte del diagnóstico %d exportado en %s", k->rep.id, ruta);
+    aviso_rep(k, 0, m);
+    return 1;
+}
+
 /* ---------------------------------------------------------------- F08 ---- */
 
 static void aviso_expl(Controlador *k, int es_error, const char *txt) {
@@ -694,6 +745,8 @@ int controlador_accion(Controlador *k, const char *accion) {
     else if (!strcmp(buf, "guardar"))          controlador_guardar(k);
     else if (!strcmp(buf, "listar"))           controlador_listar(k);
     else if (!strcmp(buf, "abrir") && arg)     controlador_abrir(k, atoi(arg));
+    else if (!strcmp(buf, "reporte") && arg)   controlador_reporte(k, atoi(arg));
+    else if (!strcmp(buf, "exportar"))         controlador_exportar(k);
     else if (!strcmp(buf, "vehiculo") && arg) {   /* marca,modelo,anio,cilindrada,combustible,km */
         char *c[6];
         int n = 0;

@@ -7,6 +7,7 @@
 #include "explicacion.h"
 #include "historial.h"
 #include "pruebas_adicionales.h"
+#include "reporte.h"
 #include "sintomas.h"
 #include "vehiculo.h"
 
@@ -75,6 +76,12 @@ typedef struct {
     int hay_abierto;
     char aviso_hist[4096];      /* registros dañados, error de Prolog ("" = ninguno) */
     int aviso_hist_error;
+    /* F13 · reporte textual del diagnóstico guardado `rep.id` (lo arma Prolog). */
+    Reporte rep;
+    int hay_rep;
+    int rep_pedido;             /* id del último reporte pedido (evita repetir la petición al dibujar) */
+    char aviso_rep[4096];       /* exportado en ..., o el error ("" = ninguno) */
+    int aviso_rep_error;
     /* F11 · RB2 */
     Contradiccion contra;
 } Controlador;
@@ -122,6 +129,13 @@ void controlador_listar(Controlador *k);
 /* Abre un diagnóstico guardado en k->abierto (no reemplaza al diagnóstico actual). */
 int controlador_abrir(Controlador *k, int id);
 
+/* ---- F13 · reporte textual ---- */
+/* Pide el reporte del diagnóstico guardado `id` (RNF-01: id > 0; sin guardar no hay reporte). */
+int controlador_reporte(Controlador *k, int id);
+/* Escribe k->rep en datos/reportes/ (o SE_REPORTES) sin sobrescribir; el resultado queda en
+ * k->aviso_rep (la ruta, o el motivo del error de escritura). 1 si se exportó. */
+int controlador_exportar(Controlador *k);
+
 /* ---- F08 · explicación del razonamiento ---- */
 /* RNF-01: solo con un diagnóstico calculado se pide `explicar`; sin él, "Primero genere un
  * diagnóstico". Un error o una traza vacía quedan en k->aviso_expl sin dibujar nada. */
@@ -139,7 +153,8 @@ void controlador_cancelar_contradiccion(Controlador *k);
 /* Acciones por texto (demos y evidencia de pruebas): "marcar:id=estado", "quitar:id", "limpiar",
  * "catalogo", "diagnosticar", "hallazgo:hall_x=estado", "resolver:id", "cancelar", "matar",
  * "recomendar", "registrar:prueba=resultado" (F07), "acciones" (F09), "explicar" (F08),
- * "guardar", "listar", "abrir:id" (F10), "vehiculo:marca,modelo,anio,cilindrada,combustible,km".
+ * "guardar", "listar", "abrir:id" (F10), "vehiculo:marca,modelo,anio,cilindrada,combustible,km",
+ * "reporte:id", "exportar" (F13).
  * 0 ok, -1 si es desconocida o está mal formada. */
 int controlador_accion(Controlador *k, const char *accion);
 

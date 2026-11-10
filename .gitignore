@@ -8,3 +8,6 @@ pruebas/evidencia/*.bmp
 # Historial generado al usar el programa (F10); la carpeta datos/ se conserva con .gitkeep
 datos/registros.txt
 pruebas/evidencia/registros_capturas.txt
+pruebas/evidencia/reportes_capturas/
+# Reportes exportados al usar el programa (F13)
+datos/reportes/

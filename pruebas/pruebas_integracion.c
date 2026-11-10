@@ -511,6 +511,49 @@ static void n9_historial_corrupto(void) {
     remove(registros_tmp);
 }
 
+static void i10_reporte(void) {
+    puts("I10 · F13: reporte textual del diagnóstico guardado y exportación");
+    char dir[256];
+    snprintf(dir, sizeof dir, "/tmp/se_reportes_%d", (int)getpid());
+    setenv("SE_REPORTES", dir, 1);
+    remove(registros_tmp);
+    Controlador k; listo(&k, SERVIDOR);
+    CHECK(!controlador_reporte(&k, 0) && strstr(k.aviso_rep, "Guarde el diagnóstico"), "sin guardar no hay reporte");
+    CHECK(!controlador_exportar(&k) && k.aviso_rep_error, "sin reporte no se exporta");
+    con_vehiculo(&k);
+    sintomas_pdf(&k);
+    controlador_hallazgo(&k, "hall_medir_espesor_pastillas_freno", "normal");
+    controlador_hallazgo(&k, "hall_revisar_nivel_estado_liquido_frenos", "severo");
+    controlador_hallazgo(&k, "hall_inspeccionar_disco_rayaduras_alabeo", "normal");
+    controlador_diagnosticar(&k);
+    controlador_guardar(&k);
+    CHECK(controlador_reporte(&k, k.guardado_id) && k.rep.id == k.guardado_id, "reporte del diagnóstico guardado");
+    CHECK(strstr(k.rep.texto, "Líquido de frenos (Frenos): 93,1 %, confirmado") &&
+          strstr(k.rep.texto, "Purgar y cambiar el líquido de frenos"), "PDF §6: Líquido confirmado y sus acciones");
+    char pct[32];
+    snprintf(pct, sizeof pct, "%.1f", k.diag.comps[0].prob * 100.0);
+    for (char *c = pct; *c; c++) if (*c == '.') *c = ',';
+    CHECK(strstr(k.rep.texto, pct) && strstr(k.rep.texto, k.diag.comps[0].nombre), "coincide con lo mostrado en Diagnóstico");
+    CHECK(controlador_exportar(&k) && strstr(k.aviso_rep, dir) && !k.aviso_rep_error, "Exportar escribe el archivo y muestra la ruta");
+    char ruta[600];
+    snprintf(ruta, sizeof ruta, "%s", strstr(k.aviso_rep, dir));
+    FILE *f = fopen(ruta, "r");
+    char linea[64] = "";
+    if (f) { if (!fgets(linea, sizeof linea, f)) linea[0] = '\0'; fclose(f); }
+    CHECK(!strncmp(linea, "REPORTE DE DIAGNÓSTICO", strlen("REPORTE DE DIAGNÓSTICO")), "el archivo tiene el reporte");
+    remove(ruta);
+    controlador_cerrar(&k);
+
+    setenv("SE_REPORTES", "/proc/sin_permiso/reportes", 1);
+    listo(&k, SERVIDOR);
+    CHECK(controlador_reporte(&k, 1), "reporte de un diagnóstico del historial al reabrir");
+    CHECK(!controlador_exportar(&k) && k.aviso_rep_error && strstr(k.aviso_rep, "No se pudo crear") && !k.hay_error,
+          "error de escritura: se informa y la aplicación sigue");
+    controlador_cerrar(&k);
+    rmdir(dir);
+    remove(registros_tmp);
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     snprintf(registros_tmp, sizeof registros_tmp, "/tmp/se_registros_%d.txt", (int)getpid());
@@ -521,6 +564,7 @@ int main(void) {
     i6_pruebas(); n6_pruebas_tras_caida(); i7_acciones(); n7_acciones_error();
     i8_explicacion(); n8_explicacion_error();
     i9_historial(); n9_historial_corrupto();
+    i10_reporte();
     printf("\npruebas_integracion: %d verificaciones, %d fallos\n", total, fallos);
     return fallos ? 1 : 0;
 }

@@ -2,11 +2,14 @@
  * dibujar (RNF-01). No necesitan swipl ni SDL. */
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "acciones.h"
 #include "diagnostico.h"
 #include "explicacion.h"
 #include "historial.h"
+#include "reporte.h"
 #include "pruebas_adicionales.h"
 #include "sintomas.h"
 
@@ -247,6 +250,42 @@ int main(void) {
         j = cJSON_Parse("[{\"id\":3,\"fecha\":\"f\",\"entrada\":{},\"resultado\":{}}]");
         CHECK(diagnostico_guardado_parsear(&g, j, err, sizeof err) < 0, "sin vehículo se rechaza");
         cJSON_Delete(j);
+    }
+
+    puts("reporte (F13, RNF-01/02: validar, no sobrescribir, informar errores de escritura)");
+    {
+        Reporte rp;
+        memset(&rp, 0, sizeof rp);
+        char ruta[512], ruta2[512], nombre[64];
+        cJSON *j = cJSON_Parse("[{\"id\":2,\"texto\":\"REPORTE\nlinea\"}]");
+        CHECK(reporte_parsear(&rp, j, err, sizeof err) == 0 && rp.id == 2 && !strcmp(rp.texto, "REPORTE\nlinea"),
+              "reporte válido se acepta");
+        cJSON_Delete(j);
+        j = cJSON_Parse("[{\"id\":2,\"texto\":\"\"}]");
+        CHECK(reporte_parsear(&rp, j, err, sizeof err) < 0 && rp.id == 2, "un reporte vacío se rechaza");
+        cJSON_Delete(j);
+        j = cJSON_Parse("[{\"id\":0,\"texto\":\"X\"}]");
+        CHECK(reporte_parsear(&rp, j, err, sizeof err) < 0, "id no positivo se rechaza");
+        cJSON_Delete(j);
+        struct tm tm = { .tm_year = 2026 - 1900, .tm_mon = 10, .tm_mday = 16, .tm_hour = 9, .tm_min = 5, .tm_sec = 7, .tm_isdst = -1 };
+        time_t t = mktime(&tm);
+        reporte_nombre(t, nombre, sizeof nombre);
+        CHECK(!strcmp(nombre, "diagnostico_20261116_090507.txt"), "nombre diagnostico_AAAAMMDD_HHMMSS.txt");
+        char dir[256];
+        snprintf(dir, sizeof dir, "/tmp/se_reportes_unit_%d/datos/reportes", (int)getpid());
+        CHECK(reporte_exportar(dir, "uno", t, ruta, sizeof ruta, err, sizeof err) == 0 && strstr(ruta, nombre),
+              "exporta y crea la carpeta que falta");
+        CHECK(reporte_exportar(dir, "dos", t, ruta2, sizeof ruta2, err, sizeof err) == 0 &&
+              strstr(ruta2, "diagnostico_20261116_090507_2.txt"), "a la misma hora no sobrescribe: agrega _2");
+        FILE *f = fopen(ruta, "r");
+        char buf[16] = "";
+        if (f) { if (!fgets(buf, sizeof buf, f)) buf[0] = '\0'; fclose(f); }
+        CHECK(!strcmp(buf, "uno\n"), "el primer reporte queda intacto");
+        remove(ruta); remove(ruta2);
+        CHECK(reporte_exportar("datos/../../etc", "x", t, ruta, sizeof ruta, err, sizeof err) < 0, "una ruta con .. se rechaza");
+        CHECK(reporte_exportar("/proc/sin_permiso", "x", t, ruta, sizeof ruta, err, sizeof err) < 0 &&
+              strstr(err, "No se pudo crear"), "carpeta sin permiso: se informa el motivo");
+        CHECK(reporte_exportar(dir, "", t, ruta, sizeof ruta, err, sizeof err) < 0, "sin texto no se exporta");
     }
 
     printf("\npruebas_c: %d verificaciones, %d fallos\n", total, fallos);

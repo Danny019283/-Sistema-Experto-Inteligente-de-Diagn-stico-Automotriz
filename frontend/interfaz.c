@@ -569,6 +569,8 @@ static void pantalla_explicacion(struct nk_context *ctx, Controlador *k) {
 
 /* ----------------------------------------------------------------------- F10 ---- */
 
+static void aviso_reporte(struct nk_context *ctx, const Controlador *k);   /* F13, más abajo */
+
 /* Nombre de un dato de la entrada: el del catálogo para un síntoma; una prueba con sus palabras. */
 static void nombre_dato_entrada(const Controlador *k, const char *id, char *out, size_t n) {
     for (int i = 0; i < k->cat.n; i++)
@@ -603,13 +605,17 @@ static void lista_historial(struct nk_context *ctx, Controlador *k) {
 }
 
 /* El diagnóstico abierto: vehículo, entrada y el resultado con el mismo dibujo que en Diagnóstico. */
-static void detalle_historial(struct nk_context *ctx, const Controlador *k) {
+static void detalle_historial(struct nk_context *ctx, Controlador *k) {
     if (!k->hay_abierto) {
         nk_layout_row_dynamic(ctx, 44, 1);
         nk_label_colored_wrap(ctx, "Elija un diagnóstico de la lista para verlo.", GRIS);
         return;
     }
     const DiagGuardado *g = &k->abierto;
+    nk_layout_row_dynamic(ctx, 34, 1);   /* F13: el reporte de cualquier diagnóstico guardado */
+    if (nk_button_label(ctx, "Exportar el reporte de este diagnóstico") && controlador_reporte(k, g->id))
+        controlador_exportar(k);
+    if (k->rep_pedido == g->id) aviso_reporte(ctx, k);
     nk_layout_row_dynamic(ctx, 26, 1);
     nk_labelf_colored(ctx, NK_TEXT_LEFT, AZUL, "DIAGNÓSTICO %d · %s", g->id, g->fecha);
     nk_layout_row_dynamic(ctx, 24, 1);
@@ -647,6 +653,67 @@ static void pantalla_historial(struct nk_context *ctx, Controlador *k) {
     }
     if (nk_group_begin(ctx, "Detalle", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
         detalle_historial(ctx, k);
+        nk_group_end(ctx);
+    }
+}
+
+/* ----------------------------------------------------------------------- F13 ---- */
+
+/* Vista previa: una fila por línea del texto de Prolog; los títulos (en mayúsculas) en color. */
+static void vista_reporte(struct nk_context *ctx, const char *txt) {
+    char linea[1024];
+    for (const char *p = txt; *p;) {
+        const char *nl = strchr(p, '\n');
+        size_t len = nl ? (size_t)(nl - p) : strlen(p);
+        snprintf(linea, sizeof linea, "%.*s", (int)(len < sizeof linea ? len : sizeof linea - 1), p);
+        if (!linea[0]) {
+            nk_layout_row_dynamic(ctx, 8, 1);
+            nk_spacing(ctx, 1);
+        } else {
+            /* Título: la primera palabra en mayúsculas ("SÍNTOMAS", "COMPONENTES (de mayor...)"). */
+            int titulo = linea[0] >= 'A' && linea[0] <= 'Z', letras = 0;
+            for (const char *c = linea; titulo && *c && *c != ' '; c++, letras++)
+                if (*c >= 'a' && *c <= 'z') titulo = 0;
+            titulo = titulo && letras >= 3;
+            parrafo(ctx, linea, titulo ? AZUL : nk_rgb(215, 215, 215));
+        }
+        p += len + (nl ? 1 : 0);
+    }
+}
+
+static void aviso_reporte(struct nk_context *ctx, const Controlador *k) {
+    if (k->aviso_rep[0]) {
+        nk_layout_row_dynamic(ctx, 44, 1);
+        nk_label_colored_wrap(ctx, k->aviso_rep, k->aviso_rep_error ? ROJO : VERDE);
+    }
+}
+
+/* F13 · RF-15: el reporte del diagnóstico actual (ya guardado), con vista previa y Exportar. */
+static void pantalla_reporte(struct nk_context *ctx, Controlador *k) {
+    if (k->guardado_id == 0) {           /* RNF-01: no hay reporte sin diagnóstico guardado */
+        nk_layout_row_dynamic(ctx, 50, 1);
+        nk_label_colored_wrap(ctx, "El reporte se genera desde el historial: guarde primero el diagnóstico.", AMBAR);
+        nk_layout_row_dynamic(ctx, 36, 1);
+        if (nk_button_label(ctx, "Guardar diagnóstico")) controlador_guardar(k);
+        if (k->aviso_guardar[0]) {
+            nk_layout_row_dynamic(ctx, 44, 1);
+            nk_label_colored_wrap(ctx, k->aviso_guardar, k->aviso_guardar_error ? ROJO : VERDE);
+        }
+        return;
+    }
+    if (k->rep_pedido != k->guardado_id) controlador_reporte(k, k->guardado_id);
+    nk_layout_row_dynamic(ctx, 36, 2);
+    if (!k->hay_rep) nk_widget_disable_begin(ctx);
+    if (nk_button_label(ctx, "Exportar") && k->hay_rep) controlador_exportar(k);
+    if (!k->hay_rep) nk_widget_disable_end(ctx);
+    if (nk_button_label(ctx, "Actualizar vista previa")) controlador_reporte(k, k->guardado_id);
+    aviso_reporte(ctx, k);
+    if (!k->hay_rep) return;
+    float alto = nk_window_get_content_region(ctx).h - 30 - 36 - 16 - (k->aviso_rep[0] ? 48.0f : 0.0f);
+    if (alto < 240) alto = 240;
+    nk_layout_row_dynamic(ctx, alto, 1);
+    if (nk_group_begin(ctx, "Vista previa del reporte", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
+        vista_reporte(ctx, k->rep.texto);
         nk_group_end(ctx);
     }
 }
@@ -732,7 +799,7 @@ static void dialogo_contradiccion(struct nk_context *ctx, Controlador *k, int w,
     }
 }
 
-/* Contenido de cada pantalla; Reporte (F13) sigue pendiente. */
+/* Contenido de cada pantalla. */
 static void pantalla(struct nk_context *ctx, Controlador *k, Menu *m) {
     nk_layout_row_dynamic(ctx, 30, 1);
     nk_label(ctx, menu_titulo(m->actual), NK_TEXT_LEFT);
@@ -746,6 +813,7 @@ static void pantalla(struct nk_context *ctx, Controlador *k, Menu *m) {
     if (m->actual == PANT_ACCIONES) { pantalla_acciones(ctx, k, m); return; }
     if (m->actual == PANT_EXPLICACION) { pantalla_explicacion(ctx, k); return; }
     if (m->actual == PANT_HISTORIAL) { pantalla_historial(ctx, k); return; }
+    if (m->actual == PANT_REPORTE) { pantalla_reporte(ctx, k); return; }
     nk_label_wrap(ctx, "Pantalla pendiente de implementar.");
 }
 

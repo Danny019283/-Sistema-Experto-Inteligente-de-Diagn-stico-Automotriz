@@ -10,12 +10,13 @@
 
 static void uso(const char *prog) {
     fprintf(stderr,
-        "Uso: %s [--backend script.pl] [--pantalla vehiculo|sintomas|diagnostico|pruebas|acciones|explicacion|historial]\n"
+        "Uso: %s [--backend script.pl] [--pantalla vehiculo|sintomas|diagnostico|pruebas|acciones|explicacion|historial|reporte]\n"
         "          [--accion A]... [--captura salida.bmp]\n"
         "  --backend   servidor Prolog a lanzar (por defecto " BACKEND_DIR "/servidor_json.pl)\n"
         "  --accion    acción previa a dibujar (repetible): marcar:id=estado, quitar:id, limpiar,\n"
         "              diagnosticar, hallazgo:hall_x=estado, resolver:id, cancelar, matar, catalogo,\n"
-        "              recomendar, registrar:prueba=resultado, acciones, explicar\n"
+        "              recomendar, registrar:prueba=resultado, acciones, explicar, guardar, listar,\n"
+        "              abrir:id, vehiculo:marca,modelo,anio,cilindrada,combustible,km, reporte:id, exportar\n"
         "  --captura   guarda la pantalla en un .bmp y termina (evidencia de pruebas)\n", prog);
 }
 
@@ -27,13 +28,14 @@ static int pantalla_desde(const char *n) {
     if (!strcmp(n, "acciones")) return PANT_ACCIONES;
     if (!strcmp(n, "explicacion")) return PANT_EXPLICACION;
     if (!strcmp(n, "historial")) return PANT_HISTORIAL;
+    if (!strcmp(n, "reporte")) return PANT_REPORTE;
     return -2;
 }
 
 int main(int argc, char **argv) {
     static const char *archivos[] = { "hechos.pl", "reglas.pl", "inferencia.pl", "consultas.pl",
         "explicaciones.pl", "servidor_json.pl", "sistemas.pl", "memoria_x.pl", "ops_sintomas.pl",
-        "retroceso.pl", "historial.pl", "pruebas_adicionales.pl", "acciones.pl" };
+        "retroceso.pl", "historial.pl", "pruebas_adicionales.pl", "acciones.pl", "reporte.pl" };
     const char *script = BACKEND_DIR "/servidor_json.pl", *captura = NULL;
     const char *acciones[MAX_ACCIONES];
     int nacc = 0, pantalla = -1;
