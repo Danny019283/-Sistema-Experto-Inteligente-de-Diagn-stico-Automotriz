@@ -1445,3 +1445,62 @@ test(contradiccion_directa_narra_rb2, [setup(limpio_r(_)), cleanup(restaurar_r(_
     traza_r("{}", T), reglas_r(T, ['R2b', 'RB2', 'R6']),
     T = [_, E|_], tiene_r(E.texto, "el usuario debe elegir").
 :- end_tests(explicacion_rb2).
+
+% ---------------------------------------------------------------------------
+% F13 reporte textual de un diagnóstico guardado (RF-15).
+% ---------------------------------------------------------------------------
+:- begin_tests(reporte_textual).
+:- use_module('../backend/historial').
+:- use_module('../backend/reporte').
+:- use_module('../backend/explicaciones', [porcentaje/2]).
+pedir_t(Op, Args, R) :-
+    format(string(L), "{\"id\":6,\"op\":\"~w\",\"args\":~s}", [Op, Args]), once(procesar_linea(L, R)).
+limpio_t(_) :- historial:ruta_registros(Def), nb_setval(ruta_t, Def),
+    tmp_file(registros, B), atom_concat(B, '/datos/registros.txt', Ruta), usar_registros(Ruta).
+restaurar_t(_) :- nb_getval(ruta_t, Def), usar_registros(Def), retractall(vehiculo:vehiculo(_, _, _, _, _, _)).
+vehiculo_t :- pedir_t(registrar_vehiculo, "{\"marca\":\"Toyota\",\"modelo\":\"Corolla\",\"anio\":2015,\"cilindrada\":\"1.8 L\",\"combustible\":\"gasolina\",\"kilometraje\":120000}", R), R.estado == ok.
+pdf_t :- pedir_t(diagnosticar, "{\"sintomas\":{\"chirrido_frenos\":\"presente\",\"pedal_freno_esponjoso\":\"presente\"},\"hallazgos\":{\"hall_medir_espesor_pastillas_freno\":\"normal\",\"hall_revisar_nivel_estado_liquido_frenos\":\"severo\",\"hall_inspeccionar_disco_rayaduras_alabeo\":\"normal\"}}", R), R.estado == ok.
+guardar_t(Id) :- pedir_t(guardar_diagnostico, "{}", R), R.estado == ok, R.resultados = [S], Id = S.id.
+texto_t(Args, T) :- pedir_t(reporte_textual, Args, R), R.estado == ok, R.resultados = [X], T = X.texto.
+tiene_t(T, P) :- once(sub_string(T, _, _, _, P)).
+
+test(reporte_sin_diagnostico, [setup(limpio_t(_)), cleanup(restaurar_t(_))]) :-
+    pedir_t(reporte_textual, "{}", R), R.error.codigo == sin_diagnostico.
+test(reporte_sin_guardar, [setup(limpio_t(_)), cleanup(restaurar_t(_))]) :-
+    pdf_t, pedir_t(reporte_textual, "{}", R), R.error.codigo == sin_guardar,
+    R.error.mensaje == "Guarde el diagnóstico antes de generar el reporte".
+test(reporte_del_pdf, [setup(limpio_t(_)), cleanup(restaurar_t(_))]) :-
+    vehiculo_t, pdf_t, guardar_t(Id), texto_t("{}", T),
+    format(string(N), "Diagnóstico número: ~w", [Id]), tiene_t(T, N),
+    tiene_t(T, "Vehículo: Toyota Corolla 2015, 1.8 L, gasolina, 120000 km"),
+    tiene_t(T, "- Los frenos chirrían: presente"),
+    tiene_t(T, "2. Revisar el nivel y estado del líquido de frenos (Líquido de frenos): severo"),
+    tiene_t(T, "1. Líquido de frenos (Frenos): 93,1 %, confirmado"),
+    tiene_t(T, "\"Purgar y cambiar el líquido de frenos\" (relevancia 88,5 %)"),
+    tiene_t(T, "baja de 63,3 % a 3,9 %"),
+    tiene_t(T, "Concluyente, con 3 de 5 iteraciones.").
+test(reporte_por_id_y_tras_reiniciar, [setup(limpio_t(_)), cleanup(restaurar_t(_))]) :-
+    vehiculo_t, pdf_t, guardar_t(Id), texto_t("{}", T1),
+    historial:ruta_registros(Ruta), usar_registros(Ruta),        % como al reabrir la aplicación
+    format(string(A), "{\"id\":~w}", [Id]), texto_t(A, T2),
+    T1 == T2.
+test(reporte_coincide_con_lo_guardado, [setup(limpio_t(_)), cleanup(restaurar_t(_))]) :-
+    vehiculo_t, pdf_t, guardar_t(Id), texto_t("{}", T),
+    historial:cargar_diagnostico(Id, D),
+    forall(member(C, D.resultado.componentes),
+           ( porcentaje(C.probabilidad, P), format(string(L), "~w (~w): ~s, ~w", [C.nombre, C.sistema, P, C.estado]),
+             tiene_t(T, L) )).
+test(reporte_sin_resultados_lo_indica, [setup(limpio_t(_)), cleanup(restaurar_t(_))]) :-
+    vehiculo_t,
+    pedir_t(diagnosticar, "{\"sintomas\":{\"no_arranca\":\"presente\",\"ralenti_inestable\":\"presente\"}}", _),
+    guardar_t(_), texto_t("{}", T),
+    tiene_t(T, "Sin resultados: ningún componente tiene evidencia"),
+    tiene_t(T, "Sin acciones: ningún componente confirmado"),
+    tiene_t(T, "PRUEBAS REALIZADAS\n- Ninguna.").
+test(reporte_id_invalido_o_inexistente, [setup(limpio_t(_)), cleanup(restaurar_t(_))]) :-
+    pedir_t(reporte_textual, "{\"id\":\"x\"}", R1), R1.error.codigo == entrada_invalida,
+    pedir_t(reporte_textual, "{\"id\":42}", R2), R2.error.codigo == no_encontrado.
+test(reporte_sin_simbolos_especiales, [setup(limpio_t(_)), cleanup(restaurar_t(_))]) :-
+    vehiculo_t, pdf_t, guardar_t(_), texto_t("{}", T),
+    forall(member(C, ["«", "»", "≤", "≥", "×"]), \+ sub_string(T, _, _, _, C)).
+:- end_tests(reporte_textual).

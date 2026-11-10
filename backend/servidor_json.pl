@@ -160,8 +160,9 @@ error(Id, Codigo, Mensaje, _{id: Id, estado: error, resultados: [],
 
 message_to_string(E, S) :- format(string(S), "~p", [E]).
 
-% Operaciones de F05 (síntomas), F11 (RB2), F07 (pruebas) y F09 (acciones): se cargan al final, ya existen los puntos multifile.
+% Operaciones de F05 (síntomas), F11 (RB2), F07 (pruebas), F09 (acciones) y F13 (reporte): se cargan al final, ya existen los puntos multifile.
 :- use_module(ops_sintomas).
 :- use_module(retroceso).
 :- use_module(pruebas_adicionales).   % F07: recomendar_pruebas, registrar_resultado_prueba
 :- use_module(acciones).              % F09: acciones_correctivas
+:- use_module(reporte).               % F13: reporte_textual
