@@ -87,8 +87,242 @@ static void pantalla_vehiculo(struct nk_context *ctx, Controlador *k, Menu *m) {
         m->vehiculo = 1;
 }
 
-/* Contenido provisional de las pantallas pendientes (F05-F10). Los botones "Simular"
- * solo encienden banderas para recorrer el flujo. */
+/* ------------------------------------------------------------------ F05 / F06 ---- */
+#define VERDE  nk_rgb(90, 200, 120)
+#define AMBAR  nk_rgb(240, 180, 60)
+#define GRIS   nk_rgb(140, 140, 140)
+#define ROJO   nk_rgb(230, 80, 80)
+#define AZUL   nk_rgb(120, 170, 255)
+
+/* Mayúsculas ASCII y letras acentuadas Latin-1 en UTF-8 (á -> Á, ó -> Ó, ñ -> Ñ...). */
+static void mayusculas(const char *src, char *dst, size_t n) {
+    size_t i = 0;
+    for (; src[i] && i + 1 < n; i++) {
+        unsigned char c = (unsigned char)src[i];
+        if (c >= 'a' && c <= 'z') dst[i] = (char)(c - 32);
+        else if (c == 0xC3 && src[i + 1] && i + 2 < n) {
+            unsigned char d = (unsigned char)src[i + 1];
+            dst[i++] = (char)c;
+            dst[i] = (char)((d >= 0xA0 && d <= 0xBE && d != 0xB7) ? d - 0x20 : d);
+        } else dst[i] = (char)c;
+    }
+    dst[i] = '\0';
+}
+
+/* Etiqueta con fondo de color (no interactiva): distingue concluyente de no concluyente. */
+static void insignia(struct nk_context *ctx, const char *txt, struct nk_color fondo) {
+    struct nk_style_item it = nk_style_item_color(fondo);
+    nk_style_push_style_item(ctx, &ctx->style.button.normal, it);
+    nk_style_push_style_item(ctx, &ctx->style.button.hover, it);
+    nk_style_push_style_item(ctx, &ctx->style.button.active, it);
+    nk_style_push_color(ctx, &ctx->style.button.text_normal, nk_rgb(20, 20, 20));
+    nk_style_push_color(ctx, &ctx->style.button.text_hover, nk_rgb(20, 20, 20));
+    nk_style_push_color(ctx, &ctx->style.button.text_active, nk_rgb(20, 20, 20));
+    (void)nk_button_label(ctx, txt);
+    for (int i = 0; i < 3; i++) nk_style_pop_color(ctx);
+    for (int i = 0; i < 3; i++) nk_style_pop_style_item(ctx);
+}
+
+static void barra_prob(struct nk_context *ctx, double p, struct nk_color col) {
+    nk_size v = (nk_size)(p * 1000.0 + 0.5);
+    struct nk_style_item it = nk_style_item_color(col);
+    nk_style_push_style_item(ctx, &ctx->style.progress.cursor_normal, it);
+    nk_style_push_style_item(ctx, &ctx->style.progress.cursor_hover, it);
+    nk_style_push_style_item(ctx, &ctx->style.progress.cursor_active, it);
+    nk_progress(ctx, &v, 1000, NK_FIXED);
+    for (int i = 0; i < 3; i++) nk_style_pop_style_item(ctx);
+}
+
+static struct nk_color color_estado(EstadoComp e) {
+    return e == COMP_CONFIRMADO ? VERDE : e == COMP_DESCARTADO ? GRIS : AMBAR;
+}
+
+/* Catálogo agrupado por sistema; cada síntoma con presente / ausente / desconocido. */
+static void panel_catalogo(struct nk_context *ctx, Controlador *k) {
+    if (!k->catalogo_ok) {
+        nk_layout_row_dynamic(ctx, 90, 1);
+        nk_label_colored_wrap(ctx, "Catálogo vacío o no disponible: el diagnóstico queda deshabilitado. "
+                                   "Revisa la conexión o la base de conocimiento.", ROJO);
+        return;
+    }
+    static const char *rot[] = { "Presente", "Ausente", "Desconocido" };
+    static const EstadoSintoma ord[] = { EST_PRESENTE, EST_AUSENTE, EST_DESCONOCIDO };
+    const char *previo = "";
+    for (int i = 0; i < k->cat.n; i++) {
+        const SintomaCat *s = &k->cat.items[i];
+        if (strcmp(s->sistema, previo) != 0) {
+            char may[SISTEMA_LEN];
+            mayusculas(s->sistema, may, sizeof may);
+            nk_layout_row_dynamic(ctx, 28, 1);
+            nk_label_colored(ctx, may, NK_TEXT_LEFT, AZUL);
+            previo = s->sistema;
+        }
+        EstadoSintoma actual = seleccion_estado(&k->sel, s->id);
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_label(ctx, s->nombre, NK_TEXT_LEFT);
+        nk_layout_row_dynamic(ctx, 24, 3);
+        struct nk_style_item oscuro = nk_style_item_color(nk_rgb(55, 55, 55));
+        struct nk_style_item punto = nk_style_item_color(VERDE);
+        nk_style_push_style_item(ctx, &ctx->style.option.normal, oscuro);
+        nk_style_push_style_item(ctx, &ctx->style.option.hover, oscuro);
+        nk_style_push_style_item(ctx, &ctx->style.option.active, oscuro);
+        nk_style_push_style_item(ctx, &ctx->style.option.cursor_normal, punto);
+        nk_style_push_style_item(ctx, &ctx->style.option.cursor_hover, punto);
+        for (int j = 0; j < 3; j++)
+            if (nk_option_label(ctx, rot[j], actual == ord[j]) && actual != ord[j])
+                controlador_marcar(k, s->id, ord[j]);
+        for (int j = 0; j < 5; j++) nk_style_pop_style_item(ctx);
+    }
+}
+
+/* Panel «Síntomas seleccionados»: refleja exactamente lo que Prolog confirmó. */
+static void panel_seleccion(struct nk_context *ctx, Controlador *k, Menu *m) {
+    if (k->sel.n == 0) {
+        nk_layout_row_dynamic(ctx, 26, 1);
+        nk_label(ctx, "Aún no hay síntomas marcados.", NK_TEXT_LEFT);
+    }
+    for (int i = 0; i < k->sel.n; i++) {
+        const SintomaSel *s = &k->sel.items[i];
+        float r[] = { 0.55f, 0.45f };
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_label(ctx, s->nombre, NK_TEXT_LEFT);
+        nk_layout_row(ctx, NK_DYNAMIC, 24, 2, r);
+        nk_label_colored(ctx, estado_texto(s->estado), NK_TEXT_LEFT,
+            s->estado == EST_PRESENTE ? VERDE : s->estado == EST_AUSENTE ? AMBAR : GRIS);
+        if (nk_button_label(ctx, "Quitar")) { controlador_quitar(k, s->id); break; }
+    }
+    nk_layout_row_dynamic(ctx, 24, 1);
+    nk_labelf_colored(ctx, NK_TEXT_LEFT, nk_rgb(180, 180, 180), "Seleccionados: %d. Al cálculo: %d",
+                      k->sel.n, seleccion_cuenta_calculo(&k->sel));
+    nk_layout_row_dynamic(ctx, 20, 1);
+    nk_label_colored(ctx, "Desconocido no entra al cálculo.", NK_TEXT_LEFT, GRIS);
+    nk_layout_row_dynamic(ctx, 34, 1);
+    if (nk_button_label(ctx, "Limpiar selección")) controlador_limpiar(k);
+    int listo = controlador_puede_diagnosticar(k);
+    if (!listo) nk_widget_disable_begin(ctx);
+    if (nk_button_label(ctx, "Ir a Diagnóstico") && listo) menu_ir(m, PANT_DIAGNOSTICO);
+    if (!listo) nk_widget_disable_end(ctx);
+    if (!listo) {
+        nk_layout_row_dynamic(ctx, 44, 1);
+        nk_label_wrap(ctx, !k->catalogo_ok ? "Sin catálogo: diagnóstico deshabilitado."
+            : k->contra.pendiente ? "Resuelve la contradicción para continuar."
+            : "Marca al menos un síntoma como presente o ausente.");
+    }
+}
+
+static void pantalla_sintomas(struct nk_context *ctx, Controlador *k, Menu *m) {
+    float alto = nk_window_get_content_region(ctx).h - 30 - 16 - (k->aviso[0] ? 70.0f : 0.0f);
+    if (alto < 220) alto = 220;
+    if (k->aviso[0]) {
+        nk_layout_row_dynamic(ctx, 70, 1);
+        nk_label_colored_wrap(ctx, k->aviso, ROJO);
+    }
+    float r2[] = { 0.56f, 0.44f };
+    nk_layout_row(ctx, NK_DYNAMIC, alto, 2, r2);
+    if (nk_group_begin(ctx, "Catálogo de síntomas", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
+        panel_catalogo(ctx, k);
+        nk_group_end(ctx);
+    }
+    if (nk_group_begin(ctx, "Síntomas seleccionados", NK_WINDOW_BORDER | NK_WINDOW_TITLE)) {
+        panel_seleccion(ctx, k, m);
+        nk_group_end(ctx);
+    }
+}
+
+static void fila_componente(struct nk_context *ctx, const Componente *c) {
+    char tit[NOMBRE_LEN + SISTEMA_LEN + 8], pct[24];
+    snprintf(tit, sizeof tit, "%s  (%s)", c->nombre, c->sistema);
+    nk_layout_row_dynamic(ctx, 22, 1);
+    nk_label(ctx, tit, NK_TEXT_LEFT);
+    float r[] = { 0.52f, 0.20f, 0.28f };
+    nk_layout_row(ctx, NK_DYNAMIC, 22, 3, r);
+    barra_prob(ctx, c->prob, color_estado(c->estado));
+    snprintf(pct, sizeof pct, "%.1f %%", c->prob * 100.0);
+    nk_label(ctx, pct, NK_TEXT_RIGHT);
+    nk_label_colored(ctx, estado_comp_texto(c->estado), NK_TEXT_LEFT, color_estado(c->estado));
+}
+
+static void resultado_diagnostico(struct nk_context *ctx, const Diagnostico *d) {
+    char t[160];
+    nk_layout_row_dynamic(ctx, 36, 1);
+    insignia(ctx, d->concluyente ? "DIAGNÓSTICO CONCLUYENTE" : "DIAGNÓSTICO NO CONCLUYENTE",
+             d->concluyente ? VERDE : AMBAR);
+    nk_layout_row_dynamic(ctx, 24, 1);
+    nk_labelf(ctx, NK_TEXT_LEFT, "Iteraciones usadas: %d de %d", d->iteraciones, d->max_iteraciones);
+    snprintf(t, sizeof t, "Motivo: %s.", motivo_texto(d->motivo));
+    nk_layout_row_dynamic(ctx, 44, 1);
+    nk_label_colored_wrap(ctx, t, d->concluyente ? nk_rgb(180, 180, 180) : AMBAR);
+    if (!d->concluyente && d->prueba_sugerida[0]) {
+        snprintf(t, sizeof t, "Prueba sugerida: %s", d->prueba_sugerida);
+        nk_layout_row_dynamic(ctx, 44, 1);
+        nk_label_colored_wrap(ctx, t, AMBAR);
+    }
+    nk_layout_row_dynamic(ctx, 28, 1);
+    nk_label_colored(ctx, "HIPÓTESIS (por probabilidad)", NK_TEXT_LEFT, AZUL);
+    int hay_desc = 0;
+    for (int i = 0; i < d->n; i++) {
+        if (d->comps[i].estado == COMP_DESCARTADO) { hay_desc = 1; continue; }
+        fila_componente(ctx, &d->comps[i]);
+    }
+    if (hay_desc) {   /* las descartadas se muestran aparte, con su probabilidad */
+        nk_layout_row_dynamic(ctx, 28, 1);
+        nk_label_colored(ctx, "DESCARTADAS", NK_TEXT_LEFT, GRIS);
+        for (int i = 0; i < d->n; i++)
+            if (d->comps[i].estado == COMP_DESCARTADO) fila_componente(ctx, &d->comps[i]);
+    }
+}
+
+static void pantalla_diagnostico(struct nk_context *ctx, Controlador *k) {
+    if (k->registrado) {   /* resumen del vehículo (F04) */
+        char r[512];
+        vehiculo_resumen(&k->guardado, r, sizeof r);
+        nk_layout_row_dynamic(ctx, 26, 1);
+        nk_label(ctx, r, NK_TEXT_LEFT);
+    }
+    nk_layout_row_dynamic(ctx, 24, 1);
+    nk_labelf(ctx, NK_TEXT_LEFT, "Síntomas seleccionados: %d (al cálculo: %d)", k->sel.n,
+              seleccion_cuenta_calculo(&k->sel));
+    int listo = controlador_puede_diagnosticar(k);
+    nk_layout_row_dynamic(ctx, 40, 1);
+    if (!listo) nk_widget_disable_begin(ctx);
+    if (nk_button_label(ctx, "Diagnosticar") && listo) controlador_diagnosticar(k);
+    if (!listo) nk_widget_disable_end(ctx);
+    if (k->aviso_diag[0]) {
+        nk_layout_row_dynamic(ctx, 84, 1);
+        nk_label_colored_wrap(ctx, k->aviso_diag, k->aviso_diag_error ? ROJO : AMBAR);
+    } else if (!k->hay_diag) {
+        nk_layout_row_dynamic(ctx, 44, 1);
+        nk_label_wrap(ctx, "Pulsa Diagnosticar para ver todas las hipótesis.");
+    }
+    if (k->hay_diag) resultado_diagnostico(ctx, &k->diag);
+}
+
+/* F11 · RB2: «Marcaste X e Y, que son incompatibles. ¿Cuál es correcta?» */
+static void dialogo_contradiccion(struct nk_context *ctx, Controlador *k, int w, int h) {
+    struct nk_rect r = nk_rect(w / 2.0f - 380, h / 2.0f - 150, 760, 300);
+    if (nk_popup_begin(ctx, NK_POPUP_STATIC, "Contradicción detectada",
+            NK_WINDOW_TITLE | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR, r)) {
+        char b[2 * NOMBRE_LEN + 32];
+        int cerrar = 0;
+        nk_layout_row_dynamic(ctx, 70, 1);
+        nk_label_wrap(ctx, k->contra.mensaje);
+        nk_layout_row_dynamic(ctx, 36, 1);
+        snprintf(b, sizeof b, "Es correcta: %s", k->contra.nombre_a);
+        if (nk_button_label(ctx, b)) { controlador_resolver(k, k->contra.id_a); cerrar = 1; }
+        snprintf(b, sizeof b, "Es correcta: %s", k->contra.nombre_b);
+        if (!cerrar && nk_button_label(ctx, b)) { controlador_resolver(k, k->contra.id_b); cerrar = 1; }
+        if (!cerrar && nk_button_label(ctx, "Cancelar (conservar la selección anterior)")) {
+            controlador_cancelar_contradiccion(k);
+            cerrar = 1;
+        }
+        if (cerrar) nk_popup_close(ctx);
+        nk_popup_end(ctx);
+    } else {
+        controlador_cancelar_contradiccion(k);   /* cerrarlo con la X equivale a cancelar */
+    }
+}
+
+/* Contenido de cada pantalla; las de F07-F10 siguen pendientes. */
 static void pantalla(struct nk_context *ctx, Controlador *k, Menu *m) {
     nk_layout_row_dynamic(ctx, 30, 1);
     nk_label(ctx, menu_titulo(m->actual), NK_TEXT_LEFT);
@@ -96,22 +330,9 @@ static void pantalla(struct nk_context *ctx, Controlador *k, Menu *m) {
         pantalla_vehiculo(ctx, k, m);
         return;
     }
-    if (k->registrado && m->actual == PANT_DIAGNOSTICO) { /* resumen del vehículo (F04) */
-        char r[512];
-        vehiculo_resumen(&k->guardado, r, sizeof r);
-        nk_label_wrap(ctx, r);
-    }
+    if (m->actual == PANT_SINTOMAS) { pantalla_sintomas(ctx, k, m); return; }
+    if (m->actual == PANT_DIAGNOSTICO) { pantalla_diagnostico(ctx, k); return; }
     nk_label_wrap(ctx, "Pantalla pendiente de implementar.");
-    nk_layout_row_dynamic(ctx, 34, 1);
-    switch (m->actual) {
-    case PANT_SINTOMAS:
-        if (!m->sintomas && nk_button_label(ctx, "Simular síntomas seleccionados")) m->sintomas = 1;
-        break;
-    case PANT_DIAGNOSTICO:
-        if (!m->diagnostico && nk_button_label(ctx, "Simular diagnóstico calculado")) m->diagnostico = 1;
-        break;
-    default: break;
-    }
 }
 
 /* Devuelve 1 si el usuario pidió salir. */
@@ -121,8 +342,11 @@ static int interfaz_marco(struct nk_context *ctx, Controlador *k, Menu *m, int w
         nk_end(ctx);
         return 0;
     }
+    m->sintomas = seleccion_cuenta_calculo(&k->sel) > 0;   /* F05: habilita Diagnóstico */
+    m->diagnostico = k->hay_diag;                          /* F06: habilita Pruebas, Explicación... */
+    if (!menu_habilitada(m, m->actual)) m->actual = PANT_SINTOMAS;
     int caido = k->hay_error || !conexion_viva(&k->con);
-    int bloqueado = caido; /* con el diálogo abierto, el resto no responde */
+    int bloqueado = caido || k->contra.pendiente; /* con un diálogo abierto, el resto no responde */
 
     nk_layout_row_dynamic(ctx, 28, 1);
     nk_labelf_colored(ctx, NK_TEXT_RIGHT, caido ? nk_rgb(230, 80, 80) : nk_rgb(90, 200, 120),
@@ -153,6 +377,7 @@ static int interfaz_marco(struct nk_context *ctx, Controlador *k, Menu *m, int w
         nk_group_end(ctx);
     }
 
+    if (k->contra.pendiente && !caido) dialogo_contradiccion(ctx, k, w, h);   /* F11 */
     if (caido) { /* RNF-02: Prolog no responde */
         int n = 1;
         for (const char *c = k->mensaje; *c; c++) n += *c == '\n';
@@ -174,15 +399,28 @@ static int interfaz_marco(struct nk_context *ctx, Controlador *k, Menu *m, int w
     return salir;
 }
 
-int interfaz_ejecutar(Controlador *k) {
+/* Guarda lo dibujado en un .bmp (evidencia de pruebas, F12). */
+static int guardar_bmp(SDL_Renderer *ren, const char *ruta) {
+    int w, h;
+    SDL_GetRendererOutputSize(ren, &w, &h);
+    SDL_Surface *s = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
+    if (!s) return -1;
+    int rc = SDL_RenderReadPixels(ren, NULL, SDL_PIXELFORMAT_ARGB8888, s->pixels, s->pitch);
+    if (rc == 0) rc = SDL_SaveBMP(s, ruta);
+    SDL_FreeSurface(s);
+    return rc;
+}
+
+int interfaz_ejecutar(Controlador *k, const char *captura_bmp, int pantalla_inicial) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         fprintf(stderr, "Error: no hay display disponible (%s)\n", SDL_GetError());
         return 1;
     }
     SDL_Window *win = SDL_CreateWindow("Sistema experto de diagnóstico automotriz",
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960, 600, SDL_WINDOW_SHOWN);
-    SDL_Renderer *ren = win ? SDL_CreateRenderer(win, -1,
-        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC) : NULL;
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1120, 700,
+        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    SDL_Renderer *ren = win ? SDL_CreateRenderer(win, -1, captura_bmp ? SDL_RENDERER_SOFTWARE :
+        (SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC)) : NULL;
     if (win && !ren) ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
     if (!ren) {
         fprintf(stderr, "Error: no se pudo crear la ventana (%s)\n", SDL_GetError());
@@ -203,12 +441,14 @@ int interfaz_ejecutar(Controlador *k) {
 
     Menu m;
     menu_iniciar(&m);
-    controlador_probar_conexion(k);
+    if (pantalla_inicial >= 0 && pantalla_inicial < PANT_N) m.actual = (Pantalla)pantalla_inicial;
+    if (!k->hay_error) controlador_probar_conexion(k);   /* un error previo se muestra, no se oculta */
     /* shortcut: el ping es síncrono y bloquea hasta CONEXION_TIMEOUT_MS si swipl se cuelga;
      * pasar a un hilo si molesta. */
     Uint32 ultimo_ping = SDL_GetTicks();
 
-    for (int salir = 0; !salir;) {
+    int rc = 0;
+    for (int salir = 0, cuadros = 0; !salir; cuadros++) {
         SDL_Event e;
         nk_input_begin(ctx);
         while (SDL_PollEvent(&e)) {
@@ -218,7 +458,7 @@ int interfaz_ejecutar(Controlador *k) {
         nk_sdl_handle_grab();
         nk_input_end(ctx);
 
-        if (!k->hay_error && SDL_GetTicks() - ultimo_ping >= PING_CADA_MS) {
+        if (!captura_bmp && !k->hay_error && SDL_GetTicks() - ultimo_ping >= PING_CADA_MS) {
             controlador_probar_conexion(k);
             ultimo_ping = SDL_GetTicks();
         }
@@ -230,6 +470,13 @@ int interfaz_ejecutar(Controlador *k) {
         SDL_SetRenderDrawColor(ren, 30, 30, 30, 255);
         SDL_RenderClear(ren);
         nk_sdl_render(NK_ANTI_ALIASING_ON);
+        if (captura_bmp && cuadros >= 8) {
+            if (guardar_bmp(ren, captura_bmp) != 0) {
+                fprintf(stderr, "Error: no se pudo guardar la captura (%s)\n", SDL_GetError());
+                rc = 1;
+            }
+            salir = 1;
+        }
         SDL_RenderPresent(ren);
     }
 
@@ -237,5 +484,5 @@ int interfaz_ejecutar(Controlador *k) {
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
     SDL_Quit();
-    return 0;
+    return rc;
 }

@@ -2,5 +2,8 @@ sistema_experto
 *.o
 pruebas/pruebas_controlador
 *.d
+pruebas/pruebas_c
+pruebas/pruebas_integracion
+pruebas/evidencia/*.bmp
 # Historial generado al usar el programa (F10); la carpeta datos/ se conserva con .gitkeep
 datos/registros.txt

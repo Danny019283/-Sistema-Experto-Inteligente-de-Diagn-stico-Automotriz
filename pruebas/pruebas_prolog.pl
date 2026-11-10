@@ -7,6 +7,9 @@
 :- use_module('../backend/reglas').
 :- use_module('../backend/consultas').
 :- ensure_loaded('../backend/hechos').
+:- use_module('../backend/memoria_x').
+:- use_module('../backend/retroceso').
+:- use_module('../backend/sistemas').
 
 :- begin_tests(contrato_base).
 test(ping) :-
@@ -801,6 +804,231 @@ test(error_no_borra_el_registro, [setup(limpio)]) :-
     ok_json(J), peticion(registrar_vehiculo, J, _), con_campo(anio, 1900, R), R.estado == error,
     vehiculo:vehiculo(_, _, 2015, _, _, _).
 :- end_tests(vehiculo).
+
+% ===========================================================================
+%  F05 · F11 · F12: síntomas, retroceso por contradicción (RB2) y casos de razonamiento
+% ===========================================================================
+% op/3 ya existe en SWI-Prolog: la petición JSON se llama pet/3.
+pet(Op, Args, R) :-
+    atom_json_dict(Json, _{id: 1, op: Op, args: Args}, [width(0)]),
+    procesar_linea(Json, R).
+
+limpio :- retroceso:reiniciar, memoria_x:x_limpiar.
+marca(Id, Estado) :- pet(marcar_sintoma, _{id: Id, estado: Estado}, R), R.estado == ok.
+quedan(Esperados, Seleccion) :-
+    findall(Id-E, member(_{id: Id, nombre: _, estado: E}, Seleccion), Pares), Pares == Esperados.
+proba(Comps, Id, P) :- member(C, Comps), C.id == Id, !, P = C.probabilidad.
+estado_de(Comps, Id, E) :- member(C, Comps), C.id == Id, !, E = C.estado.
+cerca_de(X, Y, Tol) :- abs(X - Y) =< Tol.
+sintomas_pdf(_{chirrido_frenos: presente, pedal_freno_esponjoso: presente}).
+hallazgos_pdf(_{hall_medir_espesor_pastillas_freno: normal,
+                hall_revisar_nivel_estado_liquido_frenos: severo,
+                hall_inspeccionar_disco_rayaduras_alabeo: normal}).
+diag_pdf(Hallazgos, R) :-
+    sintomas_pdf(S),
+    (   Hallazgos == [] -> Args = _{sintomas: S} ; Args = _{sintomas: S, hallazgos: Hallazgos} ),
+    pet(diagnosticar, Args, R), R.estado == ok.
+eventos_de(D, Es) :- findall(E, ( member(T, D.traza), E = T.evento ), Es).
+
+% --- F12 · 5 casos de razonamiento ------------------------------------------
+:- begin_tests(f12_razonamiento).
+
+% R1 · Escenario del PDF §6: hipótesis alternativas con ruido (chirrido) + pedal esponjoso.
+test(caso_r1_pdf_seccion6) :-
+    limpio, marca(chirrido_frenos, presente), marca(pedal_freno_esponjoso, presente),
+    sintomas_pdf(S), pet(diagnosticar, _{sintomas: S}, R), R.resultados = [D],
+    D.concluyente == false, D.motivo == prueba_pendiente, D.iteraciones == 0, D.max_iteraciones == 5,
+    C = D.componentes,
+    proba(C, pastillas_freno, P1), cerca_de(P1, 0.63, 0.02),
+    proba(C, liquido_frenos, P2), cerca_de(P2, 0.44, 0.02),
+    proba(C, discos_freno, P3), cerca_de(P3, 0.31, 0.02),
+    forall(member(Id, [pastillas_freno, liquido_frenos, discos_freno]), estado_de(C, Id, incierto)),
+    C = [Primero|_], Primero.id == pastillas_freno,          % ordenados por P descendente
+    forall(member(X, C), X.sistema == 'Frenos' ; true),
+    member(Pastillas, C), Pastillas.id == pastillas_freno, Pastillas.sistema == 'Frenos'.
+
+% R2 · Ejemplo de entrada del enunciado: relé, solenoide o circuito de control.
+test(caso_r2_ejemplo_arranque) :-
+    limpio, marca(no_arranca, presente), marca(motor_no_gira, presente), marca(faros_tenues, ausente),
+    pet(diagnosticar, _{sintomas: _{no_arranca: presente, motor_no_gira: presente, faros_tenues: ausente},
+                        hallazgos: _{hall_medir_voltaje_bateria: normal}}, R),
+    R.resultados = [D], C = D.componentes,
+    estado_de(C, rele_arranque, confirmado), estado_de(C, circuito_control_arranque, confirmado),
+    estado_de(C, solenoide_arranque, Sol), Sol \== descartado,
+    member(Rele, C), Rele.id == rele_arranque, Rele.sistema == 'Arranque',
+    \+ ( member(X, C), X.id == pastillas_freno ),
+    % el ciclo investiga primero el solenoide; el voltaje solo se aplica cuando se pide esa prueba
+    D.motivo == prueba_pendiente, D.pruebas_sugeridas = [Sug|_], Sug.componente == solenoide_arranque,
+    D.hallazgos_no_aplicados == [hall_medir_voltaje_bateria].
+
+% R3 · RB1 + RB3 (escenarios 1 y 2 de F11) con el PDF §6: la evidencia se conserva entre retrocesos.
+test(caso_r3_rb1_refutacion_conserva_el_hallazgo) :-
+    diag_pdf(_{hall_medir_espesor_pastillas_freno: normal}, R), R.resultados = [D],
+    D.iteraciones == 1, D.motivo == prueba_pendiente,
+    eventos_de(D, [apilar, prueba, rb1]),
+    estado_de(D.componentes, pastillas_freno, descartado),
+    D.pruebas_hechas == [medir_espesor_pastillas_freno],                % el hallazgo sigue en X
+    D.pruebas_sugeridas = [S|_], S.componente == liquido_frenos.         % pasa al siguiente candidato
+test(caso_r3_rb3_vuelve_al_punto_y_evalua_discos) :-
+    diag_pdf(_{hall_medir_espesor_pastillas_freno: normal,
+               hall_revisar_nivel_estado_liquido_frenos: severo}, R), R.resultados = [D],
+    D.iteraciones == 2, eventos_de(D, [apilar, prueba, rb1, prueba, rb3]),
+    estado_de(D.componentes, liquido_frenos, confirmado),
+    D.pruebas_sugeridas = [S|_], S.componente == discos_freno.
+test(caso_r3_final_concluyente_en_3_de_5) :-
+    hallazgos_pdf(H), diag_pdf(H, R), R.resultados = [D],
+    D.concluyente == true, D.motivo == sin_inciertos, D.iteraciones == 3, D.max_iteraciones == 5,
+    eventos_de(D, [apilar, prueba, rb1, prueba, rb3, prueba, rb1]),
+    estado_de(D.componentes, discos_freno, descartado),
+    estado_de(D.componentes, pastillas_freno, descartado).
+
+% R4 · RB2 (escenario 3): «no arranca» + «ralentí inestable».
+test(caso_r4_rb2_restaura_y_el_usuario_elige) :-
+    limpio, marca(no_arranca, presente),
+    pet(marcar_sintoma, _{id: ralenti_inestable, estado: presente}, R), R.estado == ok,
+    R.resultados = [Res], Res.contradiccion \== null, Res.contradiccion.restaurado == true,
+    Res.contradiccion.par = [A, B], A.id == no_arranca, B.id == ralenti_inestable,
+    quedan([no_arranca-presente], Res.seleccion),                         % X volvió al snapshot anterior
+    pet(resolver_contradiccion, _{elegido: ralenti_inestable}, R2), R2.estado == ok,
+    R2.resultados = [Fin], Fin.contradiccion == null,
+    quedan([ralenti_inestable-presente], Fin.seleccion).
+test(caso_r4_rb2_tambien_en_la_traza_de_diagnosticar) :-
+    pet(diagnosticar, _{sintomas: _{no_arranca: presente, ralenti_inestable: presente}}, R),
+    R.resultados = [D], D.motivo == contradiccion, D.concluyente == false,
+    eventos_de(D, [rb2]), D.traza = [T], T.a == no_arranca, T.b == ralenti_inestable.
+
+% R5 · Resultado NO concluyente: el ciclo se corta por max_iteraciones sin dejar de ser una respuesta ok.
+test(caso_r5_no_concluyente_por_max_iteraciones) :-
+    modificada([parametro(max_iteraciones, 5)], [parametro(max_iteraciones, 2)],
+               ( hallazgos_pdf(H), diag_pdf(H, R) )),
+    R.resultados = [D], D.concluyente == false, D.motivo == max_iteraciones,
+    D.iteraciones == 2, D.max_iteraciones == 2.
+
+:- end_tests(f12_razonamiento).
+
+% --- F05 · catálogo y selección de síntomas ----------------------------------
+:- begin_tests(f05_sintomas).
+
+test(catalogo_agrupado_por_sistema_y_solo_sintomas) :-
+    pet(catalogo_sintomas, _{}, R), R.estado == ok,
+    findall(Id, ( member(G, R.resultados), member(X, G.sintomas), Id = X.id ), Ids),
+    length(Ids, 50), \+ ( member(I, Ids), sub_atom(I, 0, _, _, hall_) ),
+    findall(S, member(_{sistema: S, sintomas: _}, R.resultados), Sistemas),
+    sort(Sistemas, Sistemas),                                              % ordenados, sin repetir
+    member(G1, R.resultados), G1.sistema == 'Frenos',
+    findall(I1, ( member(X1, G1.sintomas), I1 = X1.id ), Frenos),
+    memberchk(chirrido_frenos, Frenos), memberchk(pedal_freno_esponjoso, Frenos).
+test(sintoma_nuevo_en_la_kb_aparece_sin_tocar_c) :-
+    modificada([], [sintoma(nuevo_x, 'Síntoma nuevo X', sintoma)],
+               ( pet(catalogo_sintomas, _{}, R),
+                 member(G, R.resultados), member(X, G.sintomas), X.id == nuevo_x )), !.
+test(el_catalogo_coincide_con_la_kb) :-
+    pet(catalogo_sintomas, _{}, R),
+    findall(Id, ( member(G, R.resultados), member(X, G.sintomas), Id = X.id ), Del), msort(Del, A),
+    findall(S, sintoma(S, _, sintoma), Kb), msort(Kb, A).
+test(marcar_devuelve_la_seleccion_y_desconocido_no_entra_al_calculo) :-
+    limpio, marca(chirrido_frenos, presente), marca(pedal_freno_esponjoso, ausente),
+    pet(marcar_sintoma, _{id: luz_check_engine, estado: desconocido}, R), R.resultados = [Res],
+    quedan([chirrido_frenos-presente, pedal_freno_esponjoso-ausente, luz_check_engine-desconocido],
+           Res.seleccion),
+    memoria_x:x_para_motor(Calculo),
+    Calculo == [chirrido_frenos-presente, pedal_freno_esponjoso-ausente].
+test(marcar_reemplaza_el_estado_sin_duplicar) :-
+    limpio, marca(chirrido_frenos, presente), marca(chirrido_frenos, ausente),
+    memoria_x:x_obtener(X), X == [chirrido_frenos-ausente].
+test(rnf01_id_inexistente_no_altera_la_seleccion) :-
+    limpio, marca(chirrido_frenos, presente),
+    pet(marcar_sintoma, _{id: no_existe, estado: presente}, R),
+    R.error.codigo == entrada_invalida, R.error.problemas = [P], sub_string(P, _, _, _, "inexistente"),
+    memoria_x:x_obtener(X), X == [chirrido_frenos-presente].
+test(rnf01_un_hallazgo_no_se_marca_como_sintoma) :-
+    limpio, pet(marcar_sintoma, _{id: hall_medir_voltaje_bateria, estado: presente}, R),
+    R.error.codigo == entrada_invalida, R.error.problemas = [P], sub_string(P, _, _, _, "hallazgo").
+test(rnf01_estado_invalido_lo_valida_prolog) :-
+    limpio, pet(marcar_sintoma, _{id: chirrido_frenos, estado: quizas}, R),
+    R.error.codigo == entrada_invalida, R.error.problemas = [P], sub_string(P, _, _, _, "estado inválido"),
+    memoria_x:x_obtener([]).
+test(rnf01_argumentos_faltantes_o_mal_tipados) :-
+    limpio,
+    pet(marcar_sintoma, _{estado: presente}, R1), R1.error.codigo == entrada_invalida,
+    pet(marcar_sintoma, _{id: 5, estado: presente}, R2), R2.error.codigo == entrada_invalida,
+    pet(quitar_sintoma, _{}, R3), R3.error.codigo == entrada_invalida.
+test(quitar_y_limpiar) :-
+    limpio, marca(chirrido_frenos, presente), marca(pedal_freno_esponjoso, presente),
+    pet(quitar_sintoma, _{id: chirrido_frenos}, R), R.estado == ok,
+    memoria_x:x_obtener([pedal_freno_esponjoso-presente]),
+    pet(quitar_sintoma, _{id: chirrido_frenos}, R2), R2.error.codigo == entrada_invalida,
+    pet(limpiar_sintomas, _{}, R3), R3.estado == ok, memoria_x:x_obtener([]).
+test(fijar_seleccion_es_todo_o_nada) :-
+    limpio, marca(chirrido_frenos, presente),
+    pet(fijar_seleccion, _{sintomas: _{pedal_freno_esponjoso: ausente, no_existe: presente}}, R),
+    R.error.codigo == entrada_invalida, memoria_x:x_obtener([chirrido_frenos-presente]),
+    pet(fijar_seleccion, _{sintomas: _{pedal_freno_esponjoso: ausente}}, R2), R2.estado == ok,
+    memoria_x:x_obtener([pedal_freno_esponjoso-ausente]),
+    pet(fijar_seleccion, _{sintomas: [a]}, R3), R3.error.codigo == entrada_invalida.
+test(fijar_seleccion_rechaza_una_contradiccion) :-
+    limpio, pet(fijar_seleccion, _{sintomas: _{no_arranca: presente, ralenti_inestable: presente}}, R),
+    R.error.codigo == contradiccion, memoria_x:x_obtener([]).
+test(sistemas_cubren_todos_los_componentes_de_la_kb) :-
+    % un componente nuevo sin fila en sistemas.pl caería en «General»: avisa para clasificarlo
+    findall(C, ( componente(C, _, _, _), sistema_componente(C, 'General') ), Sin), Sin == [].
+test(sistemas_del_sintoma_se_deducen_de_la_kb) :-
+    sistema_sintoma(chirrido_frenos, 'Frenos'), sistema_sintoma(no_arranca, 'Arranque'),
+    sistema_sintoma(ac_no_funciona, 'Climatización'),
+    sistema_sintoma(fuga_aceite, 'Motor'),                                  % excepción manual
+    modificada([], [sintoma(nuevo_y, 'Nuevo Y', sintoma)], sistema_sintoma(nuevo_y, 'General')).
+test(diagnosticar_incluye_sistema_y_max_iteraciones) :-
+    sintomas_pdf(S), pet(diagnosticar, _{sintomas: S}, R), R.resultados = [D],
+    D.max_iteraciones == 5, forall(member(C, D.componentes), is_of_type(atom, C.sistema)).
+
+:- end_tests(f05_sintomas).
+
+% --- F11 · RB2: retroceso por contradicción --------------------------------
+:- begin_tests(f11_retroceso).
+
+test(r2b_enumera_pares_por_backtracking_nativo) :-
+    X = [no_arranca-presente, ralenti_inestable-presente, se_apaga_ralenti-presente],
+    findall(P, par_en_conflicto(ralenti_inestable, X, P), [P1]), P1 == no_arranca-ralenti_inestable,
+    findall(Q, par_en_conflicto(se_apaga_ralenti, X, Q), [Q1]), Q1 == no_arranca-se_apaga_ralenti.
+test(sin_choque_si_uno_esta_ausente) :-
+    limpio, marca(no_arranca, presente),
+    pet(marcar_sintoma, _{id: ralenti_inestable, estado: ausente}, R), R.resultados = [Res],
+    Res.contradiccion == null.
+test(cancelar_restaura_el_estado_anterior) :-
+    limpio, marca(no_arranca, presente), marca(ralenti_inestable, presente),
+    pet(cancelar_contradiccion, _{}, R), R.estado == ok, R.resultados = [Res],
+    quedan([no_arranca-presente], Res.seleccion),
+    pet(cancelar_contradiccion, _{}, R2), R2.error.codigo == sin_contradiccion.
+test(rnf01_solo_se_elige_uno_de_los_dos_en_conflicto) :-
+    limpio, marca(no_arranca, presente), marca(ralenti_inestable, presente),
+    pet(resolver_contradiccion, _{elegido: chirrido_frenos}, R), R.error.codigo == eleccion_invalida,
+    pet(resolver_contradiccion, _{elegido: no_arranca}, R2), R2.estado == ok,
+    memoria_x:x_obtener(X), X == [no_arranca-presente].
+test(resolver_sin_pendiente) :-
+    limpio, pet(resolver_contradiccion, _{elegido: no_arranca}, R), R.error.codigo == sin_contradiccion.
+test(contradiccion_encadenada_vuelve_a_r2) :-
+    limpio, marca(ralenti_inestable, presente), marca(se_apaga_ralenti, presente),
+    pet(marcar_sintoma, _{id: no_arranca, estado: presente}, R), R.resultados = [Res],
+    Res.contradiccion.par = [A, _], A.id == ralenti_inestable,
+    pet(resolver_contradiccion, _{elegido: no_arranca}, R2), R2.resultados = [Res2],
+    Res2.contradiccion.par = [A2, B2], A2.id == se_apaga_ralenti, B2.id == no_arranca,   % otro choque
+    quedan([ralenti_inestable-presente, se_apaga_ralenti-presente], Res2.seleccion).
+test(rnf02_pila_vacia_es_un_error_controlado) :-
+    limpio, catch(restaurar_ultimo_snapshot, error_contrato(Cod, _), true), Cod == pila_vacia.
+test(rnf01_un_snapshot_corrupto_no_se_restaura) :-
+    limpio, apilar_snapshot([chirrido_frenos-valor_raro]),
+    catch(restaurar_ultimo_snapshot, error_contrato(Cod, _), true),
+    Cod == snapshot_invalido, memoria_x:x_obtener([]).
+test(rb2_queda_registrado_para_la_traza) :-
+    limpio, marca(no_arranca, presente), marca(ralenti_inestable, presente),
+    pet(resolver_contradiccion, _{elegido: ralenti_inestable}, _),
+    findall(T, ( registro_rb(E), T = E.evento ), Tipos), Tipos == [rb2, rb2_resuelta].
+test(cambiar_la_seleccion_reinicia_los_snapshots) :-
+    limpio, marca(no_arranca, presente), marca(ralenti_inestable, presente),
+    pet(limpiar_sintomas, _{}, _),
+    pet(resolver_contradiccion, _{elegido: no_arranca}, R), R.error.codigo == sin_contradiccion.
+
+:- end_tests(f11_retroceso).
 
 % F10 (issue #62): guardar, listar y cargar diagnósticos en el historial (datos/registros.txt).
 % Cada prueba usa un archivo temporal propio; al final se vuelve a la ruta por defecto.
