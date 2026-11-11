@@ -232,3 +232,11 @@ resultados y evidencia: `pruebas/casos_prueba.txt`. Demo sin interfaz interactiv
 ./sistema_experto --pantalla diagnostico --accion marcar:chirrido_frenos=presente \
     --accion marcar:pedal_freno_esponjoso=presente --accion diagnosticar --captura salida.bmp
 ```
+
+## Documentación
+
+- `documentacion/manual_tecnico.docx`: problema, arquitectura, base de conocimiento, reglas, recursividad,
+  backtracking, integración C-Prolog, cumplimiento de requisitos y decisiones de diseño.
+- `documentacion/manual_usuario.docx`: instalación, compilación, ejecución, uso de cada pantalla y ejemplos.
+- `documentacion/casos_prueba.docx`: los 15 casos de prueba y 10 adicionales, con entradas, expectativas,
+  resultados y capturas (el mismo contenido en texto plano está en `pruebas/casos_prueba.txt`).
