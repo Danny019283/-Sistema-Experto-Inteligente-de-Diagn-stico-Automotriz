@@ -241,5 +241,5 @@ resultados y evidencia: `pruebas/casos_prueba.txt`. Demo sin interfaz interactiv
 - `documentacion/manual_usuario.docx`: instalación, compilación, ejecución, uso de cada pantalla y ejemplos.
 - `documentacion/casos_prueba.docx`: los 15 casos de prueba y 11 adicionales, con entradas, expectativas,
   resultados y capturas (el mismo contenido en texto plano está en `pruebas/casos_prueba.txt`).
-- `documentacion/manual_tecnico.pdf` y `documentacion/manual_usuario.pdf`: los dos manuales en PDF (sección 8 del
-  enunciado), exportados desde los .docx.
+- `documentacion/manual_tecnico.pdf`, `documentacion/manual_usuario.pdf` y `documentacion/casos_prueba.pdf`: los
+  manuales (sección 8 del enunciado) y los casos de prueba en PDF, exportados desde los .docx.
