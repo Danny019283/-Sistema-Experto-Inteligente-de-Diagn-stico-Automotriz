@@ -12,10 +12,10 @@ TEST_C2 := pruebas/pruebas_c
 TEST_IN := pruebas/pruebas_integracion
 # Todo el front-end que no necesita SDL: lo comparten las pruebas del controlador y las de integración.
 TEST_LIB := frontend/controlador.c frontend/menu.c frontend/validaciones.c frontend/vehiculo.c \
-            frontend/sintomas.c frontend/diagnostico.c frontend/pruebas_adicionales.c frontend/acciones.c frontend/explicacion.c frontend/historial.c frontend/reporte.c integracion/conexion.c integracion/vendor/cJSON.c
+            frontend/sintomas.c frontend/diagnostico.c frontend/pruebas_adicionales.c frontend/acciones.c frontend/explicacion.c frontend/historial.c frontend/reporte.c frontend/consola.c integracion/conexion.c integracion/vendor/cJSON.c
 TEST_CFLAGS := -std=gnu11 -Wall -Wextra -w -Ifrontend -Iintegracion -Iintegracion/vendor
 
-.PHONY: build run test clean deps capturas calibrar
+.PHONY: build run consola test clean deps capturas calibrar
 
 build: deps $(BIN)
 
@@ -29,6 +29,10 @@ integracion/vendor/cJSON.o: CFLAGS += -w
 
 run: build
 	./$(BIN)
+
+# Interfaz de consola (menú de texto en la terminal; restricción 42 del enunciado).
+consola: build
+	./$(BIN) --consola
 
 # Prolog (plunit) + controlador (F03/F04) + validadores de respuesta (F05/F06) + integración
 # y RNF con un swipl real (F12). LANG=C.UTF-8 para que swipl lea bien los acentos.

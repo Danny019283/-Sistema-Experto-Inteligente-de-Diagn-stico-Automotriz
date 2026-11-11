@@ -2,6 +2,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "consola.h"
 #include "controlador.h"
 #include "interfaz.h"
 
@@ -10,8 +11,10 @@
 
 static void uso(const char *prog) {
     fprintf(stderr,
-        "Uso: %s [--backend script.pl] [--pantalla vehiculo|sintomas|diagnostico|pruebas|acciones|explicacion|historial|reporte]\n"
+        "Uso: %s [--consola] [--backend script.pl]\n"
+        "          [--pantalla vehiculo|sintomas|diagnostico|pruebas|acciones|explicacion|historial|reporte]\n"
         "          [--accion A]... [--captura salida.bmp]\n"
+        "  --consola   interfaz de texto en la terminal (menú numerado), sin ventana\n"
         "  --backend   servidor Prolog a lanzar (por defecto " BACKEND_DIR "/servidor_json.pl)\n"
         "  --accion    acción previa a dibujar (repetible): marcar:id=estado, quitar:id, limpiar,\n"
         "              diagnosticar, hallazgo:hall_x=estado, resolver:id, cancelar, matar, catalogo,\n"
@@ -38,11 +41,12 @@ int main(int argc, char **argv) {
         "retroceso.pl", "historial.pl", "pruebas_adicionales.pl", "acciones.pl", "reporte.pl" };
     const char *script = BACKEND_DIR "/servidor_json.pl", *captura = NULL;
     const char *acciones[MAX_ACCIONES];
-    int nacc = 0, pantalla = -1;
+    int nacc = 0, pantalla = -1, consola = 0;
     char ruta[256];
 
     for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "--backend") && i + 1 < argc) script = argv[++i];
+        if (!strcmp(argv[i], "--consola")) consola = 1;
+        else if (!strcmp(argv[i], "--backend") && i + 1 < argc) script = argv[++i];
         else if (!strcmp(argv[i], "--captura") && i + 1 < argc) captura = argv[++i];
         else if (!strcmp(argv[i], "--pantalla") && i + 1 < argc) {
             if ((pantalla = pantalla_desde(argv[++i])) == -2) { uso(argv[0]); return 2; }
@@ -63,8 +67,13 @@ int main(int argc, char **argv) {
         }
     }
 
-    Controlador k;
+    static Controlador k;                 /* grande: fuera de la pila */
     controlador_iniciar(&k, script);
+    if (consola) {                        /* restricción 42: interfaz de consola, sin SDL */
+        int rc = consola_ejecutar(&k, stdin, stdout);
+        controlador_cerrar(&k);
+        return rc;
+    }
     if (nacc > 0) {                       /* modo demo/evidencia: conecta y carga el catálogo primero */
         controlador_probar_conexion(&k);
         for (int i = 0; i < nacc; i++)

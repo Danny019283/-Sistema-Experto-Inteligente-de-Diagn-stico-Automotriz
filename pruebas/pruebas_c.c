@@ -282,6 +282,12 @@ int main(void) {
         if (f) { if (!fgets(buf, sizeof buf, f)) buf[0] = '\0'; fclose(f); }
         CHECK(!strcmp(buf, "uno\n"), "el primer reporte queda intacto");
         remove(ruta); remove(ruta2);
+        {   /* borrar las carpetas temporales que creó la prueba */
+            char base[256], sub[300];
+            snprintf(base, sizeof base, "/tmp/se_reportes_unit_%d", (int)getpid());
+            snprintf(sub, sizeof sub, "%s/datos", base);
+            rmdir(dir); rmdir(sub); rmdir(base);
+        }
         CHECK(reporte_exportar("datos/../../etc", "x", t, ruta, sizeof ruta, err, sizeof err) < 0, "una ruta con .. se rechaza");
         CHECK(reporte_exportar("/proc/sin_permiso", "x", t, ruta, sizeof ruta, err, sizeof err) < 0 &&
               strstr(err, "No se pudo crear"), "carpeta sin permiso: se informa el motivo");

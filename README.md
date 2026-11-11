@@ -20,6 +20,7 @@ Nuklear y cJSON ya vienen vendorizados (`frontend/vendor/`, `integracion/vendor/
 ```
 make build   # compila ./sistema_experto (-Wall -Wextra)
 make run     # abre la ventana; «Probar conexión» envía `ping` a Prolog
+make consola # interfaz de texto en la terminal (menú numerado), sin ventana
 make test    # pruebas Prolog + C (controlador, validadores e integración con swipl real; sin SDL2)
 make capturas   # capturas de pantalla reproducibles en pruebas/evidencia/ (necesita display / xvfb-run)
 make calibrar   # ventana válida de tau_alto / tau_bajo con los casos de prueba

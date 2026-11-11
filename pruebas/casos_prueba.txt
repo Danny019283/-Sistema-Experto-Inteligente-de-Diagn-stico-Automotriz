@@ -4,7 +4,7 @@ Total: 15 casos (5 razonamiento, 5 integración JSON, 5 RNF). Todos PASAN en `ma
 Todos corren sobre la KB real (backend/hechos.pl, 80 componentes) y el motor real (F02).
 
 Cómo reproducir
-  make test        -> plunit (307 pruebas) + controlador (89) + validadores C (70) + integración y RNF (125)
+  make test        -> plunit (307 pruebas) + controlador (89) + validadores C (70) + integración y RNF (143)
   make capturas    -> regenera las capturas de pantalla (necesita display; xvfb-run si no hay uno)
   make calibrar    -> ventana válida de tau_alto / tau_bajo
 
@@ -58,7 +58,7 @@ fijar_seleccion todo-o-nada, todos los componentes con sistema asignado; y 31 ve
 los validadores C (probabilidad fuera de [0,1], campos obligatorios, estados inválidos).
 
 --------------------------------------------------------------------------------
-E. CASOS ADICIONALES DE F07 A F13 (no cuentan entre los 15; todos en make test)
+E. CASOS ADICIONALES DE F07 A F13 Y MODO CONSOLA (no cuentan entre los 15; todos en make test)
 --------------------------------------------------------------------------------
 A1 | F07: prueba recomendada y registro de su resultado (RF-12) | PDF §6 (chirrido_frenos y pedal_freno_esponjoso presentes); recomendar_pruebas; registrar_resultado_prueba medir_espesor_pastillas_freno = normal | Pendiente: medir el espesor de las pastillas (Rp 70 %), con normal/leve/severo; al registrar normal, Pastillas baja a ≈3,9 % y la prueba no se vuelve a sugerir | Pendiente medir_espesor_pastillas_freno, Rp 70,0 %, 3 resultados; tras registrar: Pastillas 3,9 %, iteración 1, siguiente pendiente: líquido de frenos; la prueba figura como realizada | plunit pendiente_del_pdf, registrar_actualiza_probabilidad, realizada_no_se_vuelve_a_sugerir; i6_pruebas; captura f07_pruebas_registrada.png | PASA
 A2 | F07 RNF: solo la prueba pendiente, resultados válidos, sin repetir | Registrar otra prueba (líquido) antes de la pendiente; resultado "enorme"; prueba inexistente; repetir la misma prueba | Se rechaza sin cambiar el diagnóstico: prueba_no_pendiente, entrada_invalida, ya_registrada | C rechaza antes de llamar a Prolog ("La prueba recomendada ahora es ..."); Prolog responde los códigos esperados y el diagnóstico guardado en memoria es idéntico al anterior | plunit errores_no_cambian_el_estado, no_se_registra_dos_veces; i6_pruebas | PASA
@@ -70,5 +70,6 @@ A7 | F10: guardar, listar y abrir diagnósticos (RF-14) | Sin diagnóstico y sin
 A8 | F10 RNF: historial dañado y error de escritura | Agregar una línea inválida a registros.txt y listar; guardar con el historial en una carpeta sin permiso | registros_corrupto con los registros válidos; error_escritura informado sin cerrar la aplicación | Se muestran los 2 válidos y el aviso de líneas dañadas; error_escritura en pantalla, el diagnóstico no queda como guardado | plunit unidad historial; n9_historial_corrupto | PASA
 A9 | F13: reporte textual y exportación (RF-15) | Sin guardar: reporte; guardar el caso PDF §6; reporte; exportar dos veces en el mismo segundo; exportar a una carpeta sin permiso | sin_guardar; el reporte trae Líquido confirmado y sus acciones; el archivo no se sobrescribe; el error de escritura se informa | "Guarde el diagnóstico..."; "1. Líquido de frenos (Frenos): 93,1 %, confirmado" y "Purgar y cambiar el líquido de frenos" (88,5 %); segundo archivo con _2; "No se pudo crear ...: sin permiso de escritura" | plunit unidad reporte_textual (8 pruebas); pruebas_c (reporte); i10_reporte; captura f13_reporte.png | PASA
 A10 | RNF-02: swipl se cae con pruebas, acciones o explicación en pantalla | Diagnóstico con una prueba registrada; matar swipl; registrar, pedir acciones o explicación; Reintentar | Error de conexión sin cambiar lo mostrado; al reconectar se repone el diagnóstico con sus hallazgos | Registro rechazado con error de conexión, pruebas y diagnóstico intactos; tras Reintentar sigue la misma prueba pendiente; acciones y explicación vuelven a funcionar | n6_pruebas_tras_caida, n7_acciones_error, n8_explicacion_error | PASA
+A11 | Restricción 42: interfaz de consola (menú de texto) | Guion de entradas en ./sistema_experto --consola: opciones inválidas, vehículo, síntomas (uno inexistente), diagnosticar, las tres pruebas, acciones, explicación, guardar dos veces, reporte con exportación, historial. Otro guion: síntomas incompatibles | Todo el flujo funciona sin ventana; las entradas inválidas se vuelven a pedir; RB2 se resuelve con un menú; el fin de la entrada cierra sin error | "Opción inválida"; "no_existe" rechazado en C; Pastillas 63,3 %; Líquido confirmado 93,1 %; Purgar 88,5 %; traza por iteración; guardado número 1 y "ya está guardado"; reporte exportado; historial abre el diagnóstico; menú de contradicción; sin comillas especiales en pantalla | i11_consola (18 verificaciones) | PASA
 
 Documento de Word con estos casos y las capturas: documentacion/casos_prueba.docx
