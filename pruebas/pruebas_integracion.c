@@ -8,6 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "consola.h"
 #include "controlador.h"
 
 #define SERVIDOR "backend/servidor_json.pl"
@@ -554,6 +555,75 @@ static void i10_reporte(void) {
     remove(registros_tmp);
 }
 
+/* Ejecuta el modo consola con un guion de entradas y devuelve lo que escribió (hay que liberarlo). */
+static char *consola_con(const char *guion) {
+    static Controlador k;
+    char *salida = NULL;
+    size_t n = 0;
+    FILE *in = fmemopen((void *)guion, strlen(guion), "r");
+    FILE *out = open_memstream(&salida, &n);
+    controlador_iniciar(&k, SERVIDOR);
+    consola_ejecutar(&k, in, out);
+    controlador_cerrar(&k);
+    fclose(in);
+    fclose(out);
+    return salida;
+}
+
+static void i11_consola(void) {
+    puts("I11 · Restricción 42: interfaz de consola (menú de texto) con swipl real");
+    char dir[256];
+    snprintf(dir, sizeof dir, "/tmp/se_reportes_consola_%d", (int)getpid());
+    setenv("SE_REPORTES", dir, 1);
+    remove(registros_tmp);
+    const char *guion =
+        "4\n"                                                    /* sin diagnóstico */
+        "x\n42\n"                                                /* opciones inválidas */
+        "1\nToyota\nCorolla\n2015\n1.8 L\n1\n120000\n"           /* vehículo */
+        "2\n1\nno_existe\n1\nchirrido_frenos\n1\n1\npedal_freno_esponjoso\n1\n0\n"   /* síntomas */
+        "3\n"                                                    /* diagnosticar */
+        "4\n1\n3\n1\n"                                           /* pruebas: normal, severo, normal */
+        "6\n5\n7\n7\n"                                           /* acciones, explicación, guardar dos veces */
+        "9\ns\n"                                                 /* reporte y exportar */
+        "8\n1\nn\n"                                              /* historial */
+        "0\n";
+    char *s = consola_con(guion);
+    CHECK(s && strstr(s, "Menú principal") && strstr(s, "Prolog: conectado"), "abre el menú y conecta con Prolog");
+    CHECK(strstr(s, "Primero genere un diagnóstico (opción 3)") != NULL, "sin diagnóstico las opciones 4 a 6 y 9 lo indican");
+    CHECK(strstr(s, "Opción inválida") != NULL, "RNF-01: una opción inválida se vuelve a pedir");
+    CHECK(strstr(s, "Vehículo registrado: Toyota Corolla 2015") != NULL, "registra el vehículo");
+    CHECK(strstr(s, "\"no_existe\" no está en el catálogo") != NULL, "un síntoma inexistente se rechaza en C");
+    CHECK(strstr(s, " 63.3 %  incierto    Pastillas de freno") != NULL, "diagnóstico del PDF §6: Pastillas 63,3 %");
+    CHECK(strstr(s, "Medir el espesor de las pastillas de freno") && strstr(s, "Sin pruebas pendientes"),
+          "registra las tres pruebas hasta que no quedan pendientes");
+    CHECK(strstr(s, " 93.1 %  confirmado  Líquido de frenos") != NULL, "Líquido de frenos confirmado (93,1 %)");
+    CHECK(strstr(s, "Ra  88.5 %  Purgar y cambiar el líquido de frenos") != NULL, "acción correctiva con su Ra");
+    CHECK(strstr(s, "[Iteración 1]") && strstr(s, "RB1:"), "explicación con la traza por iteración");
+    CHECK(strstr(s, "guardado en el historial con el número 1") && strstr(s, "ya está guardado"),
+          "guarda una vez y no deja guardar dos veces");
+    CHECK(strstr(s, "REPORTE DE DIAGNÓSTICO") && strstr(s, "exportado en") && strstr(s, "se_reportes_consola_"),
+          "muestra y exporta el reporte");
+    CHECK(strstr(s, "1. ") && strstr(s, "Datos ingresados:"), "el historial abre el diagnóstico guardado");
+    CHECK(strstr(s, "Hasta luego.") != NULL, "Salir termina el programa");
+    CHECK(!strstr(s, "\xc2\xab") && !strstr(s, "\xc2\xbb"), "sin comillas « » en pantalla");
+    free(s);
+
+    s = consola_con("2\n1\nno_arranca\n1\n1\nralenti_inestable\n1\n1\n0\n0\n");
+    CHECK(s && strstr(s, "Contradicción detectada") && strstr(s, "Es correcta: El motor no arranca"),
+          "RB2: la contradicción se resuelve con un menú");
+    CHECK(strstr(s, "Ralentí inestable o irregular") && strstr(s, "Seleccionados: 1"), "queda un solo síntoma tras elegir");
+    free(s);
+
+    s = consola_con("3\n");                                      /* fin de la entrada sin Salir */
+    CHECK(s && strstr(s, "Marque al menos un síntoma") && strstr(s, "Hasta luego."),
+          "sin síntomas no diagnostica y el fin de la entrada cierra sin error");
+    free(s);
+    char cmd[300];
+    snprintf(cmd, sizeof cmd, "rm -rf %s", dir);
+    if (system(cmd) != 0) puts("    (no se pudo borrar la carpeta temporal)");
+    remove(registros_tmp);
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     snprintf(registros_tmp, sizeof registros_tmp, "/tmp/se_registros_%d.txt", (int)getpid());
@@ -565,6 +635,7 @@ int main(void) {
     i8_explicacion(); n8_explicacion_error();
     i9_historial(); n9_historial_corrupto();
     i10_reporte();
+    i11_consola();
     printf("\npruebas_integracion: %d verificaciones, %d fallos\n", total, fallos);
     return fallos ? 1 : 0;
 }

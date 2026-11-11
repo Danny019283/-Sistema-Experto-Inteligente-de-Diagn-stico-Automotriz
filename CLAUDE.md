@@ -54,3 +54,7 @@ registro de F10 con los textos de explicar; errores sin_diagnostico, sin_guardar
 (valida, exporta a datos/reportes/diagnostico_AAAAMMDD_HHMMSS.txt con fopen "wx": nunca sobrescribe, agrega _2...;
 crea la carpeta; errores de escritura con su motivo); pantalla Reporte (vista previa + Exportar) y botón en Historial.
 SE_REPORTES cambia la carpeta (pruebas y capturas). datos/reportes/ está en .gitignore.
+# Modo consola (restricción 42, rama feature/modo-consola)
+frontend/consola.c: `./sistema_experto --consola` / `make consola`, menú de texto numerado sobre el mismo controlador
+(sin SDL). Prueba I11 en pruebas_integracion.c con un guion (fmemopen). Los documentos de documentacion/ usan el formato
+del equipo: Times New Roman, texto en color automático, portada en 12 pt (generados desde un script; ver historial).
