@@ -42,7 +42,7 @@ tabla(C, 'Admisión y escape') :- memberchk(C, [valvula_purga_canister, cataliza
     canister_carbon, multiple_escape, junta_multiple_escape, sensor_oxigeno, sensor_map,
     presion_turbo, filtro_aire, valvula_pcv, cuerpo_aceleracion, sensor_tps, valvula_iac]).
 tabla(C, 'Motor') :- memberchk(C, [eje_balanceo, valvula_escape, valvula_admision, bomba_aceite,
-    anillos_piston, banda_distribucion, banda_accesorios, aceite_motor, sensor_detonacion, ecu]).
+    anillos_piston, banda_distribucion, banda_ventilador, banda_motor, aceite_motor, sensor_detonacion, ecu]).
 tabla(C, 'Dirección y suspensión') :- memberchk(C, [liquido_direccion, eje_y_llantas,
     balero_rueda, sensor_tpms]).
 

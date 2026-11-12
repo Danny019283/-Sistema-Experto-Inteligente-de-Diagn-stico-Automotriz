@@ -1504,3 +1504,87 @@ test(reporte_sin_simbolos_especiales, [setup(limpio_t(_)), cleanup(restaurar_t(_
     vehiculo_t, pdf_t, guardar_t(_), texto_t("{}", T),
     forall(member(C, ["«", "»", "≤", "≥", "×"]), \+ sub_string(T, _, _, _, C)).
 :- end_tests(reporte_textual).
+
+% Bandas y termostato: cada falla del dataset es un componente y tiene sus propias pruebas, para que
+% el resultado de una no confirme la otra (antes «Banda del motor / ventilador» y «Termostato /
+% sistema de enfriamiento» juntaban dos causas).
+:- begin_tests(bandas_y_termostato).
+
+p_(C, X, P) :- probabilidad(C, X, P).
+estado_(C, X, E) :- probabilidad(C, X, P), estado_componente(P, E).
+mas_de_(A, B, X, Margen) :- p_(A, X, PA), p_(B, X, PB), PA - PB >= Margen.
+
+test(la_kb_sigue_valida) :- validar_kb([]).
+test(componentes_separados) :-
+    \+ componente(banda_accesorios, _, _, _),
+    componente(banda_ventilador, 'Banda del ventilador', _, _),
+    componente(banda_motor, 'Banda del motor', _, _),
+    componente(termostato, 'Termostato', _, _),
+    forall(member(C, [banda_ventilador, banda_motor]), sistema_componente(C, 'Motor')).
+% Cada prueba de banda/termostato verifica un solo componente (no mueve a dos a la vez).
+test(pruebas_de_un_solo_componente, [forall(member(P, [revisar_tension_alineacion_banda_ventilador,
+        revisar_tension_alineacion_banda_motor, inspeccionar_banda_ventilador_cortes_desgaste,
+        inspeccionar_banda_motor_cortes_desgaste, revisar_obstruccion_dano_radiador,
+        probar_funcionamiento_termostato]))]) :-
+    findall(C, prueba_componente(P, C), [_]).
+test(el_termostato_ya_no_cuelga_de_la_prueba_del_radiador) :-
+    prueba_componente(revisar_obstruccion_dano_radiador, radiador),
+    \+ prueba_componente(revisar_obstruccion_dano_radiador, termostato).
+
+% Solo el chirrido no distingue entre las dos bandas: empatan y las dos son hipótesis.
+test(chirrido_solo_empata_y_ambas_son_hipotesis) :-
+    X = [chirrido_correa-presente],
+    p_(banda_ventilador, X, A), p_(banda_motor, X, B), abs(A - B) < 1.0e-9,
+    clasificar(X, L), memberchk(_-banda_ventilador-incierto, L), memberchk(_-banda_motor-incierto, L).
+% Con otro síntoma propio, la hipótesis correcta queda claramente por delante.
+test(sobrecalentamiento_apunta_al_ventilador) :-
+    mas_de_(banda_ventilador, banda_motor, [chirrido_correa-presente, motor_sobrecalienta-presente], 0.2).
+test(perdida_de_potencia_apunta_a_la_banda_del_motor) :-
+    mas_de_(banda_motor, banda_ventilador, [chirrido_correa-presente, perdida_potencia-presente], 0.2).
+% El hallazgo de una banda no toca la probabilidad de la otra.
+test(hallazgo_del_ventilador_no_mueve_la_banda_del_motor) :-
+    Base = [chirrido_correa-presente, motor_sobrecalienta-presente],
+    forall(member(H, [hall_inspeccionar_banda_ventilador_cortes_desgaste, hall_revisar_tension_alineacion_banda_ventilador]),
+           ( p_(banda_motor, Base, P0), p_(banda_motor, [H-severo|Base], P1), abs(P0 - P1) < 1.0e-12 )).
+test(hallazgo_del_motor_no_mueve_la_banda_del_ventilador) :-
+    Base = [chirrido_correa-presente, perdida_potencia-presente],
+    forall(member(H, [hall_inspeccionar_banda_motor_cortes_desgaste, hall_revisar_tension_alineacion_banda_motor]),
+           ( p_(banda_ventilador, Base, P0), p_(banda_ventilador, [H-severo|Base], P1), abs(P0 - P1) < 1.0e-12 )).
+% Cada banda se confirma con su propia prueba y la otra no.
+test(prueba_severa_confirma_solo_su_banda) :-
+    estado_(banda_ventilador, [hall_inspeccionar_banda_ventilador_cortes_desgaste-severo,
+                               chirrido_correa-presente, motor_sobrecalienta-presente], confirmado),
+    estado_(banda_motor, [hall_inspeccionar_banda_ventilador_cortes_desgaste-severo,
+                          chirrido_correa-presente, motor_sobrecalienta-presente], incierto),
+    estado_(banda_motor, [hall_inspeccionar_banda_motor_cortes_desgaste-severo,
+                          chirrido_correa-presente, perdida_potencia-presente], confirmado),
+    estado_(banda_ventilador, [hall_inspeccionar_banda_motor_cortes_desgaste-severo,
+                               chirrido_correa-presente, perdida_potencia-presente], incierto).
+test(prueba_normal_descarta_solo_su_banda) :-
+    Base = [hall_inspeccionar_banda_ventilador_cortes_desgaste-normal, chirrido_correa-presente],
+    estado_(banda_ventilador, Base, descartado),
+    estado_(banda_motor, Base, incierto),
+    p_(banda_ventilador, [motor_sobrecalienta-presente|Base], P), P < 0.1.   % con el otro síntoma sigue baja
+% El ciclo completo recomienda la prueba de la banda correcta y solo esa queda confirmada.
+test(ciclo_recomienda_la_prueba_de_la_banda_correcta) :-
+    diagnosticar([chirrido_correa-presente, motor_sobrecalienta-presente], R),
+    R.motivo == prueba_pendiente,
+    R.pruebas_sugeridas = [S|_], S.componente == banda_ventilador,
+    S.prueba == inspeccionar_banda_ventilador_cortes_desgaste.
+test(ciclo_confirma_solo_la_banda_del_motor) :-
+    diagnosticar([chirrido_correa-presente, perdida_potencia-presente,
+                  hall_inspeccionar_banda_motor_cortes_desgaste-severo], R),
+    findall(Id, ( member(C, R.componentes), C.estado == confirmado, Id = C.id ), Conf),
+    memberchk(banda_motor, Conf), \+ memberchk(banda_ventilador, Conf).
+% La prueba de obstrucción del radiador mueve al radiador y no al termostato.
+test(obstruccion_del_radiador_no_mueve_al_termostato) :-
+    Base = [motor_sobrecalienta-presente, temperatura_zona_roja-presente],
+    p_(termostato, Base, T0), p_(termostato, [hall_revisar_obstruccion_dano_radiador-severo|Base], T1),
+    abs(T0 - T1) < 1.0e-12,
+    p_(radiador, [hall_revisar_obstruccion_dano_radiador-severo|Base], R1), p_(radiador, Base, R0), R1 > R0.
+test(prueba_del_termostato_no_mueve_al_radiador) :-
+    Base = [motor_sobrecalienta-presente, temperatura_zona_roja-presente],
+    p_(radiador, Base, R0), p_(radiador, [hall_probar_funcionamiento_termostato-severo|Base], R1),
+    abs(R0 - R1) < 1.0e-12,
+    estado_(termostato, [hall_probar_funcionamiento_termostato-severo|Base], confirmado).
+:- end_tests(bandas_y_termostato).
