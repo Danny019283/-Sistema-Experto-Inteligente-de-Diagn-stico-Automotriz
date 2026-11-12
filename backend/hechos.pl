@@ -101,7 +101,7 @@ componente(evaporador_ac, 'Evaporador del A/C', 40, 960).
 componente(carga_refrigerante_ac, 'Carga de refrigerante del A/C (baja o con fuga)', 40, 960).
 componente(filtro_cabina, 'Filtro de aire de la cabina', 40, 960).
 componente(refrigerante, 'Refrigerante / anticongelante', 40, 960).
-componente(termostato, 'Termostato / sistema de enfriamiento del motor', 40, 960).
+componente(termostato, 'Termostato', 40, 960).
 componente(nucleo_calefaccion, 'Núcleo de calefacción (heater core)', 40, 960).
 componente(manguera_calefaccion, 'Manguera de calefacción', 40, 960).
 componente(ventilador_radiador, 'Ventilador del radiador', 40, 960).
@@ -142,7 +142,8 @@ componente(valvula_admision, 'Válvula de admisión', 40, 960).
 componente(bomba_aceite, 'Bomba de aceite', 40, 960).
 componente(anillos_piston, 'Anillos de pistón', 40, 960).
 componente(banda_distribucion, 'Banda de distribución', 40, 960).
-componente(banda_accesorios, 'Banda del motor / ventilador', 40, 960).
+componente(banda_ventilador, 'Banda del ventilador', 40, 960).
+componente(banda_motor, 'Banda del motor', 40, 960).
 componente(claxon, 'Claxon', 40, 960).
 componente(liquido_direccion, 'Líquido de la dirección asistida', 40, 960).
 componente(eje_y_llantas, 'Eje de transmisión y llantas (balanceo/alineación)', 40, 960).
@@ -264,8 +265,10 @@ componente_sintoma(anillos_piston, humo_azul_escape, presente, 24, 48).
 componente_sintoma(anillos_piston, perdida_potencia, presente, 24, 95).
 componente_sintoma(banda_distribucion, motor_fallos_encendido, presente, 24, 213).
 componente_sintoma(banda_distribucion, no_arranca, presente, 24, 48).
-componente_sintoma(banda_accesorios, motor_sobrecalienta, presente, 24, 190).
-componente_sintoma(banda_accesorios, chirrido_correa, presente, 24, 48).
+componente_sintoma(banda_ventilador, motor_sobrecalienta, presente, 24, 190).
+componente_sintoma(banda_motor, perdida_potencia, presente, 24, 95).
+componente_sintoma(banda_ventilador, chirrido_correa, presente, 24, 48).
+componente_sintoma(banda_motor, chirrido_correa, presente, 24, 48).
 componente_sintoma(claxon, claxon_no_suena, presente, 24, 48).
 componente_sintoma(liquido_direccion, ruido_al_girar_volante, presente, 24, 48).
 componente_sintoma(liquido_direccion, volante_duro, presente, 24, 48).
@@ -358,7 +361,7 @@ accion(reemplazar_condensador_ac, 'Reemplazar condensador del A/C').
 accion(reemplazar_evaporador_ac, 'Reemplazar evaporador del A/C').
 accion(cambiar_filtro_cabina, 'Cambiar filtro de aire de la cabina').
 accion(cambiar_refrigerante, 'Cambiar refrigerante / anticongelante').
-accion(reemplazar_termostato, 'Reemplazar termostato / sistema de enfriamiento del motor').
+accion(reemplazar_termostato, 'Reemplazar el termostato').
 accion(reemplazar_nucleo_calefaccion, 'Reemplazar núcleo de calefacción (heater core)').
 accion(reemplazar_manguera_calefaccion, 'Reemplazar manguera de calefacción').
 accion(reemplazar_ventilador_radiador, 'Reemplazar ventilador del radiador').
@@ -396,7 +399,7 @@ accion(reemplazar_valvula_admision, 'Reemplazar válvula de admisión').
 accion(reemplazar_bomba_aceite, 'Reemplazar bomba de aceite').
 accion(reemplazar_anillos_piston, 'Reemplazar anillos de pistón').
 accion(reemplazar_banda_distribucion, 'Reemplazar banda de distribución').
-accion(reemplazar_banda_accesorios, 'Reemplazar banda del motor / ventilador').
+accion(reemplazar_banda_accesorios, 'Reemplazar la banda (del motor o del ventilador)').
 accion(reemplazar_claxon, 'Reemplazar claxon').
 accion(cambiar_liquido_direccion, 'Cambiar líquido de la dirección asistida').
 accion(reemplazar_eje_y_llantas, 'Reemplazar eje de transmisión y llantas (balanceo/alineación)').
@@ -481,7 +484,8 @@ accion_componente(reemplazar_fusible_rele, ventilador_radiador, 0.50).
 accion_componente(limpiar_terminales_bateria, bateria, 0.60).
 accion_componente(limpiar_terminales_bateria, motor_arranque, 0.30).
 accion_componente(cargar_bateria, bateria, 0.50).
-accion_componente(ajustar_tension_banda, banda_accesorios, 0.70).
+accion_componente(ajustar_tension_banda, banda_ventilador, 0.70).
+accion_componente(ajustar_tension_banda, banda_motor, 0.70).
 accion_componente(ajustar_tension_banda, sistema_carga, 0.50).
 accion_componente(ajustar_cable_embrague, cable_embrague, 0.80).
 accion_componente(purgar_embrague, cilindro_esclavo_embrague, 0.60).
@@ -562,7 +566,8 @@ accion_componente(reemplazar_valvula_admision, valvula_admision, 0.95).
 accion_componente(reemplazar_bomba_aceite, bomba_aceite, 0.95).
 accion_componente(reemplazar_anillos_piston, anillos_piston, 0.95).
 accion_componente(reemplazar_banda_distribucion, banda_distribucion, 0.95).
-accion_componente(reemplazar_banda_accesorios, banda_accesorios, 0.95).
+accion_componente(reemplazar_banda_accesorios, banda_ventilador, 0.95).
+accion_componente(reemplazar_banda_accesorios, banda_motor, 0.95).
 accion_componente(reemplazar_claxon, claxon, 0.95).
 accion_componente(cambiar_liquido_direccion, liquido_direccion, 0.90).
 accion_componente(reemplazar_eje_y_llantas, eje_y_llantas, 0.95).
@@ -604,7 +609,8 @@ prueba(revisar_codigos_falla_ecu, 'Revisar los códigos de falla de la ECU').
 prueba(revisar_manguera_valvula_pcv_tiene_grietas, 'Revisar si la manguera de la válvula PCV tiene grietas').
 prueba(revisar_tension_banda_alternador, 'Revisar la tensión de la banda del alternador').
 prueba(revisar_alineacion_eje_balanceo, 'Revisar la alineación del eje de balanceo').
-prueba(revisar_tension_alineacion_banda, 'Revisar la tensión y alineación de la banda').
+prueba(revisar_tension_alineacion_banda_ventilador, 'Revisar la tensión y alineación de la banda del ventilador').
+prueba(revisar_tension_alineacion_banda_motor, 'Revisar la tensión y alineación de la banda del motor').
 prueba(medir_presion_sobrealimentacion_manometro, 'Medir la presión de sobrealimentación con manómetro').
 prueba(revisar_manguera_vacio_servofreno, 'Revisar la manguera de vacío del servofreno').
 prueba(revisar_funcionamiento_piston_caliper, 'Revisar el funcionamiento del pistón del caliper').
@@ -671,7 +677,8 @@ prueba(inspeccionar_cable_embrague_desgaste, 'Inspeccionar el cable del embrague
 prueba(inspeccionar_nivel_estado_liquido_embrague, 'Inspeccionar el nivel y estado del líquido del embrague').
 prueba(inspeccionar_inyectores_diesel_fugas_u, 'Inspeccionar los inyectores diésel en busca de fugas u obstrucción').
 prueba(inspeccionar_tapa_distribuidor_grietas, 'Inspeccionar la tapa del distribuidor en busca de grietas o carbonilla').
-prueba(inspeccionar_banda_cortes_desgaste, 'Inspeccionar la banda en busca de cortes o desgaste').
+prueba(inspeccionar_banda_ventilador_cortes_desgaste, 'Inspeccionar la banda del ventilador en busca de cortes o desgaste').
+prueba(inspeccionar_banda_motor_cortes_desgaste, 'Inspeccionar la banda del motor en busca de cortes o desgaste').
 prueba(inspeccionar_multiple_escape_grietas_fugas, 'Inspeccionar el múltiple de escape en busca de grietas o fugas').
 prueba(inspeccionar_valvula_escape_carbonilla, 'Inspeccionar la válvula de escape en busca de carbonilla').
 prueba(revisar_codigos_fallo_encendido, 'Revisar códigos de fallo de encendido').
@@ -759,7 +766,8 @@ prueba_componente(revisar_codigos_falla_ecu, ecu).
 prueba_componente(revisar_manguera_valvula_pcv_tiene_grietas, valvula_pcv).
 prueba_componente(revisar_tension_banda_alternador, sistema_carga).
 prueba_componente(revisar_alineacion_eje_balanceo, eje_balanceo).
-prueba_componente(revisar_tension_alineacion_banda, banda_accesorios).
+prueba_componente(revisar_tension_alineacion_banda_ventilador, banda_ventilador).
+prueba_componente(revisar_tension_alineacion_banda_motor, banda_motor).
 prueba_componente(medir_presion_sobrealimentacion_manometro, presion_turbo).
 prueba_componente(revisar_manguera_vacio_servofreno, servofreno).
 prueba_componente(revisar_funcionamiento_piston_caliper, caliper_freno).
@@ -791,7 +799,7 @@ prueba_componente(revisar_fugas_conexiones_mangueras, manguera_radiador).
 prueba_componente(revisar_nivel_liquido_direccion, liquido_direccion).
 prueba_componente(revisar_fugas_bomba_mangueras_direccion, liquido_direccion).
 prueba_componente(revisar_sello_tapon_radiador, radiador).
-prueba_componente(revisar_obstruccion_dano_radiador, termostato).
+prueba_componente(revisar_obstruccion_dano_radiador, radiador).
 prueba_componente(revisar_sensores_relacionados_codigos_dtc, sensor_detonacion).
 prueba_componente(revisar_sensores_relacionados_codigos_dtc, sensor_map).
 prueba_componente(revisar_sensores_relacionados_codigos_dtc, sensor_oxigeno).
@@ -835,7 +843,8 @@ prueba_componente(inspeccionar_cable_embrague_desgaste, cable_embrague).
 prueba_componente(inspeccionar_nivel_estado_liquido_embrague, cilindro_esclavo_embrague).
 prueba_componente(inspeccionar_inyectores_diesel_fugas_u, bomba_inyeccion_diesel).
 prueba_componente(inspeccionar_tapa_distribuidor_grietas, tapa_distribuidor).
-prueba_componente(inspeccionar_banda_cortes_desgaste, banda_accesorios).
+prueba_componente(inspeccionar_banda_ventilador_cortes_desgaste, banda_ventilador).
+prueba_componente(inspeccionar_banda_motor_cortes_desgaste, banda_motor).
 prueba_componente(inspeccionar_multiple_escape_grietas_fugas, multiple_escape).
 prueba_componente(inspeccionar_valvula_escape_carbonilla, valvula_escape).
 prueba_componente(revisar_codigos_fallo_encendido, sensor_detonacion).
@@ -941,8 +950,10 @@ prueba_sintoma(revisar_manguera_valvula_pcv_tiene_grietas, ralenti_inestable, 0.
 prueba_sintoma(revisar_tension_banda_alternador, faros_tenues, 0.50).
 prueba_sintoma(revisar_tension_banda_alternador, luz_bateria_encendida, 0.50).
 prueba_sintoma(revisar_alineacion_eje_balanceo, ralenti_inestable, 0.50).
-prueba_sintoma(revisar_tension_alineacion_banda, chirrido_correa, 0.50).
-prueba_sintoma(revisar_tension_alineacion_banda, motor_sobrecalienta, 0.50).
+prueba_sintoma(revisar_tension_alineacion_banda_ventilador, chirrido_correa, 0.50).
+prueba_sintoma(revisar_tension_alineacion_banda_motor, chirrido_correa, 0.50).
+prueba_sintoma(revisar_tension_alineacion_banda_ventilador, motor_sobrecalienta, 0.50).
+prueba_sintoma(revisar_tension_alineacion_banda_motor, perdida_potencia, 0.50).
 prueba_sintoma(medir_presion_sobrealimentacion_manometro, perdida_potencia, 0.70).
 prueba_sintoma(revisar_manguera_vacio_servofreno, pedal_freno_esponjoso, 0.70).
 prueba_sintoma(revisar_funcionamiento_piston_caliper, freno_jala_a_un_lado, 0.50).
@@ -1040,8 +1051,10 @@ prueba_sintoma(inspeccionar_inyectores_diesel_fugas_u, humo_negro_escape, 0.50).
 prueba_sintoma(inspeccionar_inyectores_diesel_fugas_u, motor_fallos_encendido, 0.50).
 prueba_sintoma(inspeccionar_tapa_distribuidor_grietas, dificultad_arrancar, 0.70).
 prueba_sintoma(inspeccionar_tapa_distribuidor_grietas, motor_fallos_encendido, 0.70).
-prueba_sintoma(inspeccionar_banda_cortes_desgaste, chirrido_correa, 0.70).
-prueba_sintoma(inspeccionar_banda_cortes_desgaste, motor_sobrecalienta, 0.70).
+prueba_sintoma(inspeccionar_banda_ventilador_cortes_desgaste, chirrido_correa, 0.70).
+prueba_sintoma(inspeccionar_banda_motor_cortes_desgaste, chirrido_correa, 0.70).
+prueba_sintoma(inspeccionar_banda_ventilador_cortes_desgaste, motor_sobrecalienta, 0.70).
+prueba_sintoma(inspeccionar_banda_motor_cortes_desgaste, perdida_potencia, 0.70).
 prueba_sintoma(inspeccionar_multiple_escape_grietas_fugas, ruido_escape_fuerte, 0.70).
 prueba_sintoma(inspeccionar_valvula_escape_carbonilla, motor_fallos_encendido, 0.70).
 prueba_sintoma(inspeccionar_valvula_escape_carbonilla, ralenti_inestable, 0.70).
@@ -1179,7 +1192,8 @@ sintoma(hall_revisar_codigos_falla_ecu, 'Resultado: Revisar los códigos de fall
 sintoma(hall_revisar_manguera_valvula_pcv_tiene_grietas, 'Resultado: Revisar si la manguera de la válvula PCV tiene grietas', hallazgo).
 sintoma(hall_revisar_tension_banda_alternador, 'Resultado: Revisar la tensión de la banda del alternador', hallazgo).
 sintoma(hall_revisar_alineacion_eje_balanceo, 'Resultado: Revisar la alineación del eje de balanceo', hallazgo).
-sintoma(hall_revisar_tension_alineacion_banda, 'Resultado: Revisar la tensión y alineación de la banda', hallazgo).
+sintoma(hall_revisar_tension_alineacion_banda_ventilador, 'Resultado: Revisar la tensión y alineación de la banda del ventilador', hallazgo).
+sintoma(hall_revisar_tension_alineacion_banda_motor, 'Resultado: Revisar la tensión y alineación de la banda del motor', hallazgo).
 sintoma(hall_medir_presion_sobrealimentacion_manometro, 'Resultado: Medir la presión de sobrealimentación con manómetro', hallazgo).
 sintoma(hall_revisar_manguera_vacio_servofreno, 'Resultado: Revisar la manguera de vacío del servofreno', hallazgo).
 sintoma(hall_revisar_funcionamiento_piston_caliper, 'Resultado: Revisar el funcionamiento del pistón del caliper', hallazgo).
@@ -1246,7 +1260,8 @@ sintoma(hall_inspeccionar_cable_embrague_desgaste, 'Resultado: Inspeccionar el c
 sintoma(hall_inspeccionar_nivel_estado_liquido_embrague, 'Resultado: Inspeccionar el nivel y estado del líquido del embrague', hallazgo).
 sintoma(hall_inspeccionar_inyectores_diesel_fugas_u, 'Resultado: Inspeccionar los inyectores diésel en busca de fugas u obstrucción', hallazgo).
 sintoma(hall_inspeccionar_tapa_distribuidor_grietas, 'Resultado: Inspeccionar la tapa del distribuidor en busca de grietas o carbonilla', hallazgo).
-sintoma(hall_inspeccionar_banda_cortes_desgaste, 'Resultado: Inspeccionar la banda en busca de cortes o desgaste', hallazgo).
+sintoma(hall_inspeccionar_banda_ventilador_cortes_desgaste, 'Resultado: Inspeccionar la banda del ventilador en busca de cortes o desgaste', hallazgo).
+sintoma(hall_inspeccionar_banda_motor_cortes_desgaste, 'Resultado: Inspeccionar la banda del motor en busca de cortes o desgaste', hallazgo).
 sintoma(hall_inspeccionar_multiple_escape_grietas_fugas, 'Resultado: Inspeccionar el múltiple de escape en busca de grietas o fugas', hallazgo).
 sintoma(hall_inspeccionar_valvula_escape_carbonilla, 'Resultado: Inspeccionar la válvula de escape en busca de carbonilla', hallazgo).
 sintoma(hall_revisar_codigos_fallo_encendido, 'Resultado: Revisar códigos de fallo de encendido', hallazgo).
@@ -1358,9 +1373,12 @@ componente_sintoma(sistema_carga, hall_revisar_tension_banda_alternador, severo,
 componente_sintoma(eje_balanceo, hall_revisar_alineacion_eje_balanceo, normal, 1, 818).
 componente_sintoma(eje_balanceo, hall_revisar_alineacion_eje_balanceo, leve, 3, 95).
 componente_sintoma(eje_balanceo, hall_revisar_alineacion_eje_balanceo, severo, 36, 47).
-componente_sintoma(banda_accesorios, hall_revisar_tension_alineacion_banda, normal, 1, 818).
-componente_sintoma(banda_accesorios, hall_revisar_tension_alineacion_banda, leve, 3, 95).
-componente_sintoma(banda_accesorios, hall_revisar_tension_alineacion_banda, severo, 36, 47).
+componente_sintoma(banda_ventilador, hall_revisar_tension_alineacion_banda_ventilador, normal, 1, 818).
+componente_sintoma(banda_motor, hall_revisar_tension_alineacion_banda_motor, normal, 1, 818).
+componente_sintoma(banda_ventilador, hall_revisar_tension_alineacion_banda_ventilador, leve, 3, 95).
+componente_sintoma(banda_motor, hall_revisar_tension_alineacion_banda_motor, leve, 3, 95).
+componente_sintoma(banda_ventilador, hall_revisar_tension_alineacion_banda_ventilador, severo, 36, 47).
+componente_sintoma(banda_motor, hall_revisar_tension_alineacion_banda_motor, severo, 36, 47).
 componente_sintoma(presion_turbo, hall_medir_presion_sobrealimentacion_manometro, normal, 1, 818).
 componente_sintoma(presion_turbo, hall_medir_presion_sobrealimentacion_manometro, leve, 3, 95).
 componente_sintoma(presion_turbo, hall_medir_presion_sobrealimentacion_manometro, severo, 36, 47).
@@ -1454,9 +1472,9 @@ componente_sintoma(liquido_direccion, hall_revisar_fugas_bomba_mangueras_direcci
 componente_sintoma(radiador, hall_revisar_sello_tapon_radiador, normal, 1, 818).
 componente_sintoma(radiador, hall_revisar_sello_tapon_radiador, leve, 3, 95).
 componente_sintoma(radiador, hall_revisar_sello_tapon_radiador, severo, 36, 47).
-componente_sintoma(termostato, hall_revisar_obstruccion_dano_radiador, normal, 1, 818).
-componente_sintoma(termostato, hall_revisar_obstruccion_dano_radiador, leve, 3, 95).
-componente_sintoma(termostato, hall_revisar_obstruccion_dano_radiador, severo, 36, 47).
+componente_sintoma(radiador, hall_revisar_obstruccion_dano_radiador, normal, 1, 818).
+componente_sintoma(radiador, hall_revisar_obstruccion_dano_radiador, leve, 3, 95).
+componente_sintoma(radiador, hall_revisar_obstruccion_dano_radiador, severo, 36, 47).
 componente_sintoma(sensor_detonacion, hall_revisar_sensores_relacionados_codigos_dtc, normal, 3, 722).
 componente_sintoma(sensor_detonacion, hall_revisar_sensores_relacionados_codigos_dtc, leve, 8, 143).
 componente_sintoma(sensor_detonacion, hall_revisar_sensores_relacionados_codigos_dtc, severo, 29, 95).
@@ -1586,9 +1604,12 @@ componente_sintoma(bomba_inyeccion_diesel, hall_inspeccionar_inyectores_diesel_f
 componente_sintoma(tapa_distribuidor, hall_inspeccionar_tapa_distribuidor_grietas, normal, 1, 818).
 componente_sintoma(tapa_distribuidor, hall_inspeccionar_tapa_distribuidor_grietas, leve, 3, 95).
 componente_sintoma(tapa_distribuidor, hall_inspeccionar_tapa_distribuidor_grietas, severo, 36, 47).
-componente_sintoma(banda_accesorios, hall_inspeccionar_banda_cortes_desgaste, normal, 1, 818).
-componente_sintoma(banda_accesorios, hall_inspeccionar_banda_cortes_desgaste, leve, 3, 95).
-componente_sintoma(banda_accesorios, hall_inspeccionar_banda_cortes_desgaste, severo, 36, 47).
+componente_sintoma(banda_ventilador, hall_inspeccionar_banda_ventilador_cortes_desgaste, normal, 1, 818).
+componente_sintoma(banda_motor, hall_inspeccionar_banda_motor_cortes_desgaste, normal, 1, 818).
+componente_sintoma(banda_ventilador, hall_inspeccionar_banda_ventilador_cortes_desgaste, leve, 3, 95).
+componente_sintoma(banda_motor, hall_inspeccionar_banda_motor_cortes_desgaste, leve, 3, 95).
+componente_sintoma(banda_ventilador, hall_inspeccionar_banda_ventilador_cortes_desgaste, severo, 36, 47).
+componente_sintoma(banda_motor, hall_inspeccionar_banda_motor_cortes_desgaste, severo, 36, 47).
 componente_sintoma(multiple_escape, hall_inspeccionar_multiple_escape_grietas_fugas, normal, 1, 818).
 componente_sintoma(multiple_escape, hall_inspeccionar_multiple_escape_grietas_fugas, leve, 3, 95).
 componente_sintoma(multiple_escape, hall_inspeccionar_multiple_escape_grietas_fugas, severo, 36, 47).
